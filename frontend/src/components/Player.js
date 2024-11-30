@@ -1,21 +1,27 @@
+const width = 50;
 const height = 70;
+const gravity = 1;
+const jumpStrength = -15;
+const speed = 5;
+
 const jetpack_fuel_max = 100;
-const jetpack_force = -0.3; // Upward force from the jetpack
-const jetpack_fuel_depletion = 1; // Fuel depletion rate
-const jetpack_fuel_regen = 0.5; // Fuel regeneration rate
+const jetpack_force = -0.4; // Upward force from the jetpack
+const jetpack_force_max = -10; // Maximum upward force from the jetpack
+const jetpack_fuel_depletion = 0.4; // Fuel depletion rate
+const jetpack_fuel_regen = 0.06; // Fuel regeneration rate
 const jetpack_regen_delay = 2; // Delay before fuel regeneration starts (in ms)
 
 export default class Player {
   constructor(x, y) {
     this.x = x;
     this.y = y;
-    this.width = 50;
+    this.width = width;
     this.height = height;
     this.velocityX = 0;
     this.velocityY = 0;
-    this.gravity = 1;
-    this.jumpStrength = -15;
-    this.speed = 5;
+    this.gravity = gravity;
+    this.jumpStrength = jumpStrength;
+    this.speed = speed;
     this.onGround = false;
 
     // Crouch state and height adjustment
@@ -124,8 +130,14 @@ export default class Player {
 
     // Apply jetpack force and deplete fuel
     if (this.isUsingJetpack && this.jetpackFuel > 0) {
-      this.velocityY += jetpack_force;
+      // Apply jetpack force if within the limit
+      if (this.velocityY > jetpack_force_max) {
+        // Ensure velocityY does not go beyond jetpack_force
+        this.velocityY += jetpack_force;
+      }
       this.jetpackFuel -= jetpack_fuel_depletion;
+
+      // Stop using jetpack if fuel is depleted
       if (this.jetpackFuel <= 0) {
         this.jetpackFuel = 0;
         this.isUsingJetpack = false;
@@ -191,10 +203,10 @@ export default class Player {
     ctx.restore();
 
     // Draw jetpack fuel bar
-    ctx.fillStyle = "green";
+    ctx.fillStyle = "blue";
     ctx.fillRect(
       this.x,
-      this.y - 10,
+      this.y + this.height + 10,
       (this.jetpackFuel / jetpack_fuel_max) * this.width,
       5
     );
