@@ -1,4 +1,4 @@
-export default class Environment {
+class Environment {
   constructor() {
     this.groundLevel = window.innerHeight - 200;
 
@@ -9,18 +9,37 @@ export default class Environment {
     this.groundImage = new Image();
     this.groundImage.src = "/surface.png"; // Set your ground image path here
 
-    // Optional: Ensure the images are loaded before rendering
-    this.backgroundImage.onload = () => {
-      console.log("Background image loaded successfully");
-    };
-
-    this.groundImage.onload = () => {
-      console.log("Ground image loaded successfully");
-    };
+    this.obstacles = [
+      { x: 300, y: window.innerHeight - 250, width: 100, height: 50 },
+      { x: 300, y: window.innerHeight - 450, width: 100, height: 50 },
+    ];
   }
 
   getGroundLevel(x, width) {
     return this.groundLevel;
+  }
+
+  checkCollision(x, y) {
+    // Check collision with obstacles
+    for (let obs of this.obstacles) {
+      if (
+        x >= obs.x &&
+        x <= obs.x + obs.width &&
+        y >= obs.y &&
+        y <= obs.y + obs.height
+      ) {
+        // Collision detected with player id ${player.id}
+
+        return true; // Collision detected
+      }
+    }
+
+    // Check collision with the ground
+    if (y >= this.groundLevel) {
+      return true;
+    }
+
+    return false; // No collision
   }
 
   render(ctx) {
@@ -56,7 +75,6 @@ export default class Environment {
       }
     } else {
       // Fallback color for ground if image is not loaded
-      // ctx.fillStyle = "brown";
       ctx.fillRect(
         0,
         this.groundLevel,
@@ -64,5 +82,13 @@ export default class Environment {
         window.innerHeight - this.groundLevel
       );
     }
+
+    // Draw obstacles
+    ctx.fillStyle = "red";
+    this.obstacles.forEach((obs) => {
+      ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+    });
   }
 }
+
+export default Environment;
