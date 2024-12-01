@@ -1,3 +1,5 @@
+import Gun from "./Gun";
+
 const width = 50;
 const height = 70;
 const gravity = 1;
@@ -36,23 +38,16 @@ export default class Player {
     this.jetpackSound = new Audio("/sounds/jetpack.mp3");
     this.jetpackSound.loop = true; // To continuously play the sound
 
-    // Gun properties
-    this.gunLength = 30;
-    this.gunWidth = 5;
-    this.gunAngle = 0;
-
-    // Track mouse position
-    this.mouseX = 0;
-    this.mouseY = 0;
-
-    // Bullet properties
-    this.bullets = [];
-    this.bulletSpeed = 10;
+    // Gun
+    this.gun = new Gun(this);
 
     window.addEventListener("keydown", this.handleKeyDown.bind(this));
     window.addEventListener("keyup", this.handleKeyUp.bind(this));
-    window.addEventListener("mousemove", this.handleMouseMove.bind(this));
-    window.addEventListener("mousedown", this.handleMouseDown.bind(this));
+    window.addEventListener(
+      "mousemove",
+      this.gun.handleMouseMove.bind(this.gun)
+    );
+    window.addEventListener("mousedown", (e) => this.gun.handleMouseDown(e));
   }
 
   handleKeyDown(e) {
@@ -117,30 +112,6 @@ export default class Player {
     }
   }
 
-  handleMouseMove(e) {
-    this.mouseX = e.clientX;
-    this.mouseY = e.clientY;
-    const dx = this.mouseX - (this.x + this.width / 2);
-    const dy = this.mouseY - (this.y + this.height / 2);
-    this.gunAngle = Math.atan2(dy, dx);
-  }
-
-  handleMouseDown() {
-    // Shoot a bullet
-    const bulletSpeedX = Math.cos(this.gunAngle) * this.bulletSpeed;
-    const bulletSpeedY = Math.sin(this.gunAngle) * this.bulletSpeed;
-    this.bullets.push({
-      x: this.x + this.width / 2 + Math.cos(this.gunAngle) * this.gunLength,
-      y: this.y + this.height / 2 + Math.sin(this.gunAngle) * this.gunLength,
-      velocityX: bulletSpeedX,
-      velocityY: bulletSpeedY,
-    });
-    // Add sound effect for firing the bullet
-    this.bulletSound = new Audio("/sounds/submachineGun.mp3");
-    this.bulletSound.volume = 0.5; // Adjust the volume
-    this.bulletSound.play();
-  }
-
   playJetpackSound() {
     if (!this.jetpackSound.paused) return; // Prevent restarting if already playing
     this.jetpackSound.play();
@@ -155,6 +126,19 @@ export default class Player {
   update(environment) {
     this.y += this.velocityY;
     this.x += this.velocityX;
+
+    // Predict next position
+    // const nextX = this.x + this.velocityX;
+    // const nextY = this.y + this.velocityY;
+
+    // // Check for collisions with obstacles
+    // if (environment.checkCollision(nextX, this.y, this.width, this.height)) {
+    //   this.velocityX = 0; // Stop horizontal movement
+    // }
+
+    // if (environment.checkCollision(this.x, nextY, this.width, this.height)) {
+    //   this.velocityY = 0; // Stop vertical movement
+    // }
 
     // Apply gravity
     if (!this.isUsingJetpack) {
@@ -201,27 +185,7 @@ export default class Player {
     if (this.y + this.height > canvasHeight)
       this.y = canvasHeight - this.height;
 
-    // Update bullets
-    this.bullets = this.bullets.filter((bullet) => {
-      bullet.x += bullet.velocityX;
-      bullet.y += bullet.velocityY;
-
-      // Bullet-environment interaction
-      if (environment.checkCollision(bullet.x, bullet.y)) {
-        return false; // Remove bullet
-      }
-
-      // Bounds check
-      if (
-        bullet.x < 0 ||
-        bullet.x > canvasWidth ||
-        bullet.y < 0 ||
-        bullet.y > canvasHeight
-      ) {
-        return false;
-      }
-      return true;
-    });
+    this.gun.updateBullets(environment, canvasWidth, canvasHeight);
   }
 
   regenerateFuel() {
@@ -241,26 +205,7 @@ export default class Player {
     ctx.fillStyle = "blue";
     ctx.fillRect(this.x, this.y, this.width, this.height);
 
-    ctx.save();
-    ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
-    ctx.rotate(this.gunAngle);
-    ctx.fillStyle = "red";
-    ctx.fillRect(
-      // image,
-      this.gunLength / 2,
-      -this.gunWidth / 2,
-      this.gunLength,
-      this.gunWidth
-    );
-    ctx.restore();
-
-    // Draw bullets
-    this.bullets.forEach((bullet) => {
-      ctx.fillStyle = "black";
-      ctx.beginPath();
-      ctx.arc(bullet.x, bullet.y, 5, 0, Math.PI * 2);
-      ctx.fill();
-    });
+    this.gun.render(ctx);
 
     // Draw jetpack fuel bar
     ctx.fillStyle = "blue";

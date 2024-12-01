@@ -19,7 +19,7 @@ class Environment {
     return this.groundLevel;
   }
 
-  checkCollision(x, y) {
+  checkGunCollision(x, y) {
     // Check collision with obstacles
     for (let obs of this.obstacles) {
       if (
@@ -37,6 +37,27 @@ class Environment {
     // Check collision with the ground
     if (y >= this.groundLevel) {
       return true;
+    }
+
+    return false; // No collision
+  }
+
+  checkCollision(x, y, width, height) {
+    // Check collision with obstacles
+    for (let obs of this.obstacles) {
+      if (
+        x < obs.x + obs.width &&
+        x + width > obs.x &&
+        y < obs.y + obs.height &&
+        y + height > obs.y
+      ) {
+        return true; // Collision detected
+      }
+    }
+
+    // Check collision with the ground
+    if (y + height >= this.groundLevel) {
+      return true; // Ground collision
     }
 
     return false; // No collision
