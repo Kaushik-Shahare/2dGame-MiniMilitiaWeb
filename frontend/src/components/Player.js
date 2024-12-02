@@ -50,6 +50,11 @@ export default class Player {
     window.addEventListener("mousedown", (e) => this.gun.handleMouseDown(e));
   }
 
+  updatePosition(x, y) {
+    this.x = x;
+    this.y = y;
+  }
+
   handleKeyDown(e) {
     if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") {
       this.velocityX = this.speed;

@@ -5,8 +5,8 @@ import Player from "./Player";
 const GameCanvas = ({ socket }) => {
   const canvasRef = useRef(null);
   const roomIdRef = useRef(null);
-  const player = useRef(new Player(100, 500));
-  const [otherPlayers, setOtherPlayers] = useState([]); // Other players' positions
+  const player = useRef(new Player(100, 500)); // Main player instance
+  const opponentPlayer = useRef(null); // Opponent player instance
   const environment = new Environment();
   const animationFrameId = useRef(null);
 
@@ -24,18 +24,18 @@ const GameCanvas = ({ socket }) => {
 
     const update = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      environment.render(ctx);
 
+      // Render environment and main player
+      environment.render(ctx);
       player.current.update(environment);
       player.current.render(ctx);
 
-      // Render other players
-      otherPlayers.forEach(({ x, y }) => {
-        ctx.fillStyle = "red";
-        ctx.fillRect(x, y, 50, 70); // Other players' cubes
-      });
+      // Render the opponent player
+      if (opponentPlayer.current) {
+        opponentPlayer.current.render(ctx);
+      }
 
-      // Send player position to the server (ensure WebSocket is open)
+      // Send player position to the server
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(
           JSON.stringify({
@@ -51,45 +51,38 @@ const GameCanvas = ({ socket }) => {
 
     update();
 
-    // Clean up
+    // Cleanup animation frame and resize listener
     return () => {
       cancelAnimationFrame(animationFrameId.current);
       window.removeEventListener("resize", resizeCanvas);
     };
-  }, [socket, otherPlayers]);
+  }, [socket]);
 
-  // Handle WebSocket events
   useEffect(() => {
-    if (socket) {
-      socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
+    const handleSocketMessage = (event) => {
+      const data = JSON.parse(event.data);
 
-        switch (data.type) {
-          case "PLAYER_JOINED":
-            console.log("Player joined:", data.clientId);
-            break;
+      if (data.type === "UPDATE_POSITION") {
+        const { clientId, position } = data;
 
-          case "PLAYER_LEFT":
-            console.log("Player left:", data.clientId);
-            break;
-
-          case "UPDATE_POSITION":
-            setOtherPlayers((prev) =>
-              prev.some((p) => p.clientId === data.clientId)
-                ? prev.map((p) =>
-                    p.clientId === data.clientId
-                      ? { ...p, ...data.position }
-                      : p
-                  )
-                : [...prev, { clientId: data.clientId, ...data.position }]
-            );
-            break;
-
-          default:
-            console.log("Unknown message:", data);
+        // Update opponent player position
+        if (!opponentPlayer.current) {
+          opponentPlayer.current = new Player(position.x, position.y); // Create opponent player if not exists
+        } else {
+          opponentPlayer.current.updatePosition(position.x, position.y); // Update opponent player's position
         }
-      };
+      }
+    };
+
+    if (socket) {
+      socket.addEventListener("message", handleSocketMessage);
     }
+
+    return () => {
+      if (socket) {
+        socket.removeEventListener("message", handleSocketMessage);
+      }
+    };
   }, [socket]);
 
   const createRoom = () => {
@@ -109,7 +102,7 @@ const GameCanvas = ({ socket }) => {
   };
 
   const joinRoom = () => {
-    const roomId = roomIdRef.current.value;
+    const roomId = roomIdRef.current.value; // Get the value from the textarea
     if (roomId) {
       socket.send(
         JSON.stringify({
