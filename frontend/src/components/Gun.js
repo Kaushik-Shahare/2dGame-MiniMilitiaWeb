@@ -102,4 +102,8 @@ export default class Gun {
       ctx.fill();
     });
   }
+
+  getBulletsPosition() {
+    return this.bullets.x, this.bullets.y;
+  }
 }

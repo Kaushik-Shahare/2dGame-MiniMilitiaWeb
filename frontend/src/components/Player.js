@@ -220,4 +220,14 @@ export default class Player {
   getPosition() {
     return { x: this.x, y: this.y };
   }
+
+  getPlayerData() {
+    return {
+      x: this.x,
+      y: this.y,
+      isCrouching: this.isCrouching,
+      gunAngle: this.gun.gunAngle,
+      // bullets: this.gun.bullets,
+    };
+  }
 }
