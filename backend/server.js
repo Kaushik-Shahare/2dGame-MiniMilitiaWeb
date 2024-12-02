@@ -72,14 +72,17 @@ wss.on("connection", (ws) => {
 
         case "MOVE":
           if (roomId && rooms.has(roomId)) {
-            broadcastToRoom(roomId, {
-              type: "UPDATE_POSITION",
-              clientId,
-              position: data.position,
-            });
+            broadcastToRoom(
+              roomId,
+              {
+                type: "UPDATE_POSITION",
+                clientId,
+                position: data.position,
+              },
+              ws
+            );
           }
           break;
-
         default:
           console.error("Unknown message type:", data.type);
       }
@@ -120,6 +123,19 @@ function broadcastToRoom(roomId, message) {
         client.send(JSON.stringify(message));
       } catch (err) {
         console.error("Error sending message to client:", err.message);
+      }
+    });
+  }
+}
+function broadcastToRoom(roomId, message, clientId) {
+  if (rooms.has(roomId)) {
+    rooms.get(roomId).forEach((client) => {
+      if (client !== clientId) {
+        try {
+          client.send(JSON.stringify(message));
+        } catch (err) {
+          console.error("Error sending message to client:", err.message);
+        }
       }
     });
   }
