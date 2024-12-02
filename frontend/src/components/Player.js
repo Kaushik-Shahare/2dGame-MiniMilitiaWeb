@@ -113,14 +113,20 @@ export default class Player {
   }
 
   playJetpackSound() {
-    if (!this.jetpackSound.paused) return; // Prevent restarting if already playing
-    this.jetpackSound.play();
+    if (this.jetpackSound.paused) {
+      this.jetpackSound.play();
+    } else {
+      // Restart sound if it's already playing
+      this.jetpackSound.currentTime = 0;
+      this.jetpackSound.play();
+    }
   }
 
   stopJetpackSound() {
-    if (this.jetpackSound.paused) return;
-    this.jetpackSound.pause();
-    this.jetpackSound.currentTime = 0; // Reset to the beginning
+    if (!this.jetpackSound.paused) {
+      this.jetpackSound.pause();
+      this.jetpackSound.currentTime = 0;
+    }
   }
 
   update(environment) {

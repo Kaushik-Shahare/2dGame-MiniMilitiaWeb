@@ -35,13 +35,8 @@ const GameCanvas = ({ socket }) => {
             type: "MOVE",
             roomId: roomIdRef.current.value,
             player: player.current.getPlayerData(),
-            // position: player.current.getPosition(),
           })
         );
-
-        // if (player && player.current.getPlayerData()) {
-        // console.log(player.current.getPlayerData());
-        // }
       }
 
       animationFrameId.current = requestAnimationFrame(update);
