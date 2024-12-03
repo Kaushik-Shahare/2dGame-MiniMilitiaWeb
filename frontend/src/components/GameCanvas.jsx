@@ -14,13 +14,10 @@ const GameCanvas = ({ socket }) => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
 
-    const resizeCanvas = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-
-    resizeCanvas();
-    window.addEventListener("resize", resizeCanvas);
+    const fixedWidth = 1920; // Example width
+    const fixedHeight = 1080;
+    canvas.width = 1920;
+    canvas.height = 1080;
 
     const update = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -41,7 +38,12 @@ const GameCanvas = ({ socket }) => {
           JSON.stringify({
             type: "MOVE",
             roomId: roomIdRef.current.value,
-            position: { x: player.current.x, y: player.current.y },
+            position: {
+              x: player.current.x,
+              y: player.current.y,
+              isCrouching: player.current.isCrouching,
+              gunAngle: player.current.gun.gunAngle,
+            },
           })
         );
       }
@@ -54,7 +56,6 @@ const GameCanvas = ({ socket }) => {
     // Cleanup animation frame and resize listener
     return () => {
       cancelAnimationFrame(animationFrameId.current);
-      window.removeEventListener("resize", resizeCanvas);
     };
   }, [socket]);
 
@@ -69,7 +70,12 @@ const GameCanvas = ({ socket }) => {
         if (!opponentPlayer.current) {
           opponentPlayer.current = new Player(position.x, position.y); // Create opponent player if not exists
         } else {
-          opponentPlayer.current.updatePosition(position.x, position.y); // Update opponent player's position
+          opponentPlayer.current.updatePosition(
+            position.x,
+            position.y,
+            position.isCrouching,
+            position.gunAngle
+          ); // Update opponent player's position
         }
       }
     };

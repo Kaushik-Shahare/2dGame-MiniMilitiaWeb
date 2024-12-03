@@ -10,6 +10,10 @@ export default class Gun {
     this.gunWidth = gunWidth;
     this.gunAngle = 0;
 
+    // Load gun skin image
+    this.gunSkin = new Image();
+    this.gunSkin.src = "/Ak-47.png";
+
     this.bullets = [];
     this.bulletSpeed = bulletSpeed;
 
@@ -85,13 +89,29 @@ export default class Gun {
       this.player.y + this.player.height / 2
     );
     ctx.rotate(this.gunAngle);
-    ctx.fillStyle = "red";
-    ctx.fillRect(
-      this.gunLength / 2,
-      -this.gunWidth / 2,
-      this.gunLength,
-      this.gunWidth
-    );
+
+    // Draw the gun skin
+    if (this.gunSkin.complete) {
+      const imgWidth = this.gunLength + 30; // Adjust dimensions as needed
+      const imgHeight = this.gunWidth + 20;
+      ctx.drawImage(
+        this.gunSkin,
+        this.gunLength / 2,
+        -imgHeight / 2,
+        imgWidth,
+        imgHeight
+      );
+    } else {
+      // Fallback: Render a rectangle if the image isn't loaded
+      ctx.fillStyle = "red";
+      ctx.fillRect(
+        this.gunLength / 2,
+        -this.gunWidth / 2,
+        this.gunLength,
+        this.gunWidth
+      );
+    }
+
     ctx.restore();
 
     // Render bullets

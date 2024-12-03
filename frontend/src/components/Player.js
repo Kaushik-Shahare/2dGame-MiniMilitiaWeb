@@ -50,9 +50,11 @@ export default class Player {
     window.addEventListener("mousedown", (e) => this.gun.handleMouseDown(e));
   }
 
-  updatePosition(x, y) {
+  updatePosition(x, y, isCrouching, gunAngle) {
     this.x = x;
     this.y = y;
+    this.isCrouching = isCrouching;
+    this.gun.gunAngle = gunAngle;
   }
 
   handleKeyDown(e) {
