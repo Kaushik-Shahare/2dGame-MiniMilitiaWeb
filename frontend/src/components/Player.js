@@ -174,6 +174,40 @@ export default class Player {
       this.onGround = false;
     }
 
+    // Handle collision with obstacles
+    // if (environment.checkCollision(this.x, this.y, this.width, this.height)) {
+    //   this.x -= this.velocityX;
+    //   this.y -= this.velocityY;
+    //   this.velocityX = 0;
+    //   this.velocityY = 0;
+    // }
+
+    if (
+      environment.checkCollisionOnX(
+        this.x,
+        this.y,
+        this.width,
+        this.height,
+        this.velocityX
+      )
+    ) {
+      this.x -= this.velocityX;
+      this.velocityX = 0;
+    }
+
+    if (
+      environment.checkCollisionOnY(
+        this.x,
+        this.y,
+        this.width,
+        this.height,
+        this.velocityY
+      )
+    ) {
+      this.y -= this.velocityY;
+      this.velocityY = 0;
+    }
+
     // Player Bounds
     if (this.x < 0) this.x = 0;
     if (this.x + this.width > canvasWidth) this.x = canvasWidth - this.width;

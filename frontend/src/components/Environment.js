@@ -55,12 +55,36 @@ class Environment {
         return true; // Collision detected
       }
     }
+    return false; // No collision
+  }
 
-    // Check collision with the ground
-    if (y + height >= this.groundLevel) {
-      return true; // Ground collision
+  checkCollisionOnX(x, y, width, height, velocityX) {
+    // Check collision with obstacles
+    for (let obs of this.obstacles) {
+      if (
+        x + velocityX < obs.x + obs.width &&
+        x + width + velocityX > obs.x &&
+        y < obs.y + obs.height &&
+        y + height > obs.y
+      ) {
+        return true; // Collision detected
+      }
     }
+    return false; // No collision
+  }
 
+  checkCollisionOnY(x, y, width, height, velocityY) {
+    // Check collision with obstacles
+    for (let obs of this.obstacles) {
+      if (
+        x < obs.x + obs.width &&
+        x + width > obs.x &&
+        y + velocityY < obs.y + obs.height &&
+        y + height + velocityY > obs.y
+      ) {
+        return true; // Collision detected
+      }
+    }
     return false; // No collision
   }
 
