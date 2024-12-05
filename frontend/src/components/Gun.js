@@ -1,9 +1,7 @@
+import Bullet from "./Bullet";
+
 const gunLength = 30;
 const gunWidth = 5;
-const bulletSpeed = 10;
-
-const fixedWidth = 1280; // Example width
-const fixedHeight = 720;
 
 export default class Gun {
   constructor(player) {
@@ -18,11 +16,6 @@ export default class Gun {
     this.gunSkin.src = "/Ak-47.png";
 
     this.bullets = [];
-    this.bulletSpeed = bulletSpeed;
-
-    // Gun sound effects
-    this.bulletSound = new Audio("/sounds/submachineGun.mp3");
-    this.bulletSound.volume = 0.5; // Adjust volume
   }
 
   handleMouseMove(e) {
@@ -34,10 +27,6 @@ export default class Gun {
   }
 
   handleMouseDown() {
-    // Shoot a bullet
-    const bulletSpeedX = Math.cos(this.gunAngle) * this.bulletSpeed;
-    const bulletSpeedY = Math.sin(this.gunAngle) * this.bulletSpeed;
-
     // Position the bullet at the tip of the gun
     const startX =
       this.player.x +
@@ -48,40 +37,16 @@ export default class Gun {
       this.player.height / 2 +
       Math.sin(this.gunAngle) * this.gunLength;
 
-    this.bullets.push({
-      x: startX,
-      y: startY,
-      velocityX: bulletSpeedX,
-      velocityY: bulletSpeedY,
-    });
-
-    // Play gun sound
-    this.bulletSound.currentTime = 0; // Reset sound to start
-    this.bulletSound.play();
+    // Create a new bullet
+    const bullet = new Bullet(startX, startY, this.gunAngle);
+    bullet.playSound(); // Play bullet sound when fired
+    this.bullets.push(bullet);
   }
 
   updateBullets(environment, canvasWidth, canvasHeight) {
-    //  Update bullets
-    this.bullets = this.bullets.filter((bullet) => {
-      bullet.x += bullet.velocityX;
-      bullet.y += bullet.velocityY;
-
-      // Bullet-environment interaction
-      if (environment.checkGunCollision(bullet.x, bullet.y)) {
-        return false; // Remove bullet
-      }
-
-      // Bounds check
-      if (
-        bullet.x < 0 ||
-        bullet.x > canvasWidth ||
-        bullet.y < 0 ||
-        bullet.y > canvasHeight
-      ) {
-        return false;
-      }
-      return true;
-    });
+    this.bullets = this.bullets.filter((bullet) =>
+      bullet.update(environment, canvasWidth, canvasHeight)
+    );
   }
 
   render(ctx) {
@@ -118,15 +83,6 @@ export default class Gun {
     ctx.restore();
 
     // Render bullets
-    this.bullets.forEach((bullet) => {
-      ctx.fillStyle = "black";
-      ctx.beginPath();
-      ctx.arc(bullet.x, bullet.y, 5, 0, Math.PI * 2);
-      ctx.fill();
-    });
-  }
-
-  getBulletsPosition() {
-    return this.bullets.x, this.bullets.y;
+    this.bullets.forEach((bullet) => bullet.render(ctx));
   }
 }
