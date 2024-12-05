@@ -2,6 +2,9 @@ const gunLength = 30;
 const gunWidth = 5;
 const bulletSpeed = 10;
 
+const fixedWidth = 1280; // Example width
+const fixedHeight = 720;
+
 export default class Gun {
   constructor(player) {
     this.player = player; // Reference to the player

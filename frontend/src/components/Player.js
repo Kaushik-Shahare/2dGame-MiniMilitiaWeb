@@ -1,5 +1,8 @@
 import Gun from "./Gun";
 
+const fixedWidth = 1280; // Example width
+const fixedHeight = 720;
+
 const width = 50;
 const height = 70;
 const gravity = 1;
@@ -48,13 +51,6 @@ export default class Player {
       this.gun.handleMouseMove.bind(this.gun)
     );
     window.addEventListener("mousedown", (e) => this.gun.handleMouseDown(e));
-  }
-
-  updatePosition(x, y, isCrouching, gunAngle) {
-    this.x = x;
-    this.y = y;
-    this.isCrouching = isCrouching;
-    this.gun.gunAngle = gunAngle;
   }
 
   handleKeyDown(e) {
@@ -140,19 +136,6 @@ export default class Player {
     this.y += this.velocityY;
     this.x += this.velocityX;
 
-    // Predict next position
-    // const nextX = this.x + this.velocityX;
-    // const nextY = this.y + this.velocityY;
-
-    // // Check for collisions with obstacles
-    // if (environment.checkCollision(nextX, this.y, this.width, this.height)) {
-    //   this.velocityX = 0; // Stop horizontal movement
-    // }
-
-    // if (environment.checkCollision(this.x, nextY, this.width, this.height)) {
-    //   this.velocityY = 0; // Stop vertical movement
-    // }
-
     // Apply gravity
     if (!this.isUsingJetpack) {
       this.velocityY += this.gravity;
@@ -171,8 +154,8 @@ export default class Player {
       }
     }
 
-    const canvasWidth = window.innerWidth;
-    const canvasHeight = window.innerHeight;
+    const canvasWidth = fixedWidth;
+    const canvasHeight = fixedHeight;
     const groundLevel = environment.getGroundLevel(this.x, this.width);
 
     // Handle ground level logic
@@ -240,7 +223,13 @@ export default class Player {
       y: this.y,
       isCrouching: this.isCrouching,
       gunAngle: this.gun.gunAngle,
-      // bullets: this.gun.bullets,
     };
+  }
+
+  updatePosition(x, y, isCrouching, gunAngle) {
+    this.x = x;
+    this.y = y;
+    this.isCrouching = isCrouching;
+    this.gun.gunAngle = gunAngle;
   }
 }

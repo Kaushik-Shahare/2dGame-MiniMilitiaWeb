@@ -1,6 +1,9 @@
+const fixedWidth = 1280; // Example width
+const fixedHeight = 720;
+
 class Environment {
   constructor() {
-    this.groundLevel = window.innerHeight - 200;
+    this.groundLevel = fixedHeight - 200;
 
     // Initialize background and ground images
     this.backgroundImage = new Image();
@@ -10,8 +13,8 @@ class Environment {
     this.groundImage.src = "/surface.png"; // Set your ground image path here
 
     this.obstacles = [
-      { x: 300, y: window.innerHeight - 250, width: 100, height: 50 },
-      { x: 300, y: window.innerHeight - 450, width: 100, height: 50 },
+      { x: 300, y: fixedHeight - 250, width: 100, height: 50 },
+      { x: 300, y: fixedHeight - 450, width: 100, height: 50 },
     ];
   }
 
@@ -28,8 +31,6 @@ class Environment {
         y >= obs.y &&
         y <= obs.y + obs.height
       ) {
-        // Collision detected with player id ${player.id}
-
         return true; // Collision detected
       }
     }
@@ -63,26 +64,29 @@ class Environment {
     return false; // No collision
   }
 
-  render(ctx) {
+  render(ctx, scaleX, scaleY) {
+    ctx.save();
+    ctx.scale(scaleX, scaleY);
+
     // Draw background image (once, without repeating)
     if (this.backgroundImage.complete) {
       ctx.drawImage(
         this.backgroundImage,
         0, // X position of the image (start at 0)
         0, // Y position of the image (start at the top)
-        window.innerWidth, // Stretch the image across the full width
-        window.innerHeight // Stretch the image to cover the full height
+        fixedWidth, // Stretch the image across the full width
+        fixedHeight // Stretch the image to cover the full height
       );
     } else {
       // Fallback color if background image is not loaded
       ctx.fillStyle = "skyblue";
-      ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+      ctx.fillRect(0, 0, fixedWidth, fixedHeight);
     }
 
     // Draw ground image (repeat across the canvas width)
     if (this.groundImage.complete) {
       let imageWidth = this.groundImage.width;
-      let canvasWidth = window.innerWidth;
+      let canvasWidth = fixedWidth;
 
       // Draw the ground image repeatedly across the screen
       for (let x = 0; x < canvasWidth; x += imageWidth) {
@@ -91,7 +95,7 @@ class Environment {
           x,
           this.groundLevel,
           imageWidth,
-          window.innerHeight - this.groundLevel // Stretch the ground to fit height
+          fixedHeight - this.groundLevel // Stretch the ground to fit height
         );
       }
     } else {
@@ -99,8 +103,8 @@ class Environment {
       ctx.fillRect(
         0,
         this.groundLevel,
-        window.innerWidth,
-        window.innerHeight - this.groundLevel
+        fixedWidth,
+        fixedHeight - this.groundLevel
       );
     }
 
@@ -109,6 +113,8 @@ class Environment {
     this.obstacles.forEach((obs) => {
       ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
     });
+
+    ctx.restore();
   }
 }
 

@@ -9,21 +9,27 @@ const GameCanvas = ({ socket }) => {
   const opponentPlayer = useRef(null); // Opponent player instance
   const environment = new Environment();
   const animationFrameId = useRef(null);
+  const fixedWidth = 1280; // Example width
+  const fixedHeight = 720;
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
 
-    const fixedWidth = 1920; // Example width
-    const fixedHeight = 1080;
-    canvas.width = 1920;
-    canvas.height = 1080;
+    canvas.width = fixedWidth;
+    canvas.height = fixedHeight;
 
     const update = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // Scale the canvas
+      const scaleX = canvas.width / fixedWidth;
+      const scaleY = canvas.height / fixedHeight;
+      ctx.save();
+      ctx.scale(scaleX, scaleY);
+
       // Render environment and main player
-      environment.render(ctx);
+      environment.render(ctx, scaleX, scaleY);
       player.current.update(environment);
       player.current.render(ctx);
 
@@ -31,6 +37,8 @@ const GameCanvas = ({ socket }) => {
       if (opponentPlayer.current) {
         opponentPlayer.current.render(ctx);
       }
+
+      ctx.restore();
 
       // Send player position to the server
       if (socket && socket.readyState === WebSocket.OPEN) {
@@ -117,14 +125,12 @@ const GameCanvas = ({ socket }) => {
           clientId: socket.id,
         })
       );
-    } else {
-      alert("Please enter a room ID to join.");
     }
   };
 
   return (
     <div style={{ position: "relative", height: "100vh", overflow: "hidden" }}>
-      <canvas ref={canvasRef}></canvas>
+      <canvas ref={canvasRef} />
       <div
         style={{
           position: "absolute",
