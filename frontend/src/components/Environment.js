@@ -43,20 +43,20 @@ class Environment {
     return false; // No collision
   }
 
-  checkCollision(x, y, width, height) {
-    // Check collision with obstacles
-    for (let obs of this.obstacles) {
-      if (
-        x < obs.x + obs.width &&
-        x + width > obs.x &&
-        y < obs.y + obs.height &&
-        y + height > obs.y
-      ) {
-        return true; // Collision detected
-      }
-    }
-    return false; // No collision
-  }
+  // checkCollision(x, y, width, height) {
+  //   // Check collision with obstacles
+  //   for (let obs of this.obstacles) {
+  //     if (
+  //       x < obs.x + obs.width &&
+  //       x + width > obs.x &&
+  //       y < obs.y + obs.height &&
+  //       y + height > obs.y
+  //     ) {
+  //       return true; // Collision detected
+  //     }
+  //   }
+  //   return false; // No collision
+  // }
 
   checkCollisionOnX(x, y, width, height, velocityX) {
     // Check collision with obstacles
@@ -133,7 +133,7 @@ class Environment {
     }
 
     // Draw obstacles
-    ctx.fillStyle = "red";
+    ctx.fillStyle = "gray";
     this.obstacles.forEach((obs) => {
       ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
     });

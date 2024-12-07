@@ -58,12 +58,14 @@ const GameCanvas = ({ socket }) => {
 
       animationFrameId.current = requestAnimationFrame(update);
     };
+    canvas.addEventListener("mousedown", handleMouseDown);
 
     update();
 
     // Cleanup animation frame and resize listener
     return () => {
       cancelAnimationFrame(animationFrameId.current);
+      canvas.removeEventListener("mousedown", handleMouseDown);
     };
   }, [socket]);
 
@@ -76,7 +78,7 @@ const GameCanvas = ({ socket }) => {
 
         // Update opponent player position
         if (!opponentPlayer.current) {
-          opponentPlayer.current = new Player(position.x, position.y); // Create opponent player if not exists
+          opponentPlayer.current = new Player(position.x, position.y, false); // Create opponent player if not exists
         } else {
           opponentPlayer.current.updatePosition(
             position.x,
@@ -98,6 +100,12 @@ const GameCanvas = ({ socket }) => {
       }
     };
   }, [socket]);
+
+  const handleMouseDown = () => {
+    if (player.current && roomIdRef.current) {
+      player.current.gun.handleMouseDown(socket, roomIdRef.current.value);
+    }
+  };
 
   const createRoom = () => {
     socket.send(

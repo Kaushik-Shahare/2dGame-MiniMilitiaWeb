@@ -26,7 +26,7 @@ export default class Gun {
     this.gunAngle = Math.atan2(dy, dx);
   }
 
-  handleMouseDown() {
+  handleMouseDown(socket = null, roomId = null) {
     // Position the bullet at the tip of the gun
     const startX =
       this.player.x +
@@ -41,6 +41,21 @@ export default class Gun {
     const bullet = new Bullet(startX, startY, this.gunAngle);
     bullet.playSound(); // Play bullet sound when fired
     this.bullets.push(bullet);
+
+    // Send shooting information to the server
+    if (socket && roomId && socket.readyState === WebSocket.OPEN) {
+      socket.send(
+        JSON.stringify({
+          type: "SHOOT",
+          roomId: roomId,
+          position: {
+            x: startX,
+            y: startY,
+            angle: this.gunAngle,
+          },
+        })
+      );
+    }
   }
 
   updateBullets(environment, canvasWidth, canvasHeight) {
@@ -60,7 +75,7 @@ export default class Gun {
 
     // Draw the gun skin
     if (this.gunSkin.complete) {
-      const imgWidth = this.gunLength + 30; // Adjust dimensions as needed
+      const imgWidth = this.gunLength + 30;
       const imgHeight = this.gunWidth + 20;
       ctx.drawImage(
         this.gunSkin,

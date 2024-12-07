@@ -83,6 +83,21 @@ wss.on("connection", (ws) => {
             );
           }
           break;
+
+        case "SHOOT":
+          if (roomId && rooms.has(roomId)) {
+            broadcastToRoom(
+              roomId,
+              {
+                type: "SHOOT",
+                clientId,
+                position: data.position,
+              },
+              ws
+            );
+          }
+          break;
+
         default:
           console.error("Unknown message type:", data.type);
       }
@@ -127,6 +142,8 @@ function broadcastToRoom(roomId, message) {
     });
   }
 }
+
+// Broadcast to all clients in a specific room except one(sender)
 function broadcastToRoom(roomId, message, clientId) {
   if (rooms.has(roomId)) {
     rooms.get(roomId).forEach((client) => {

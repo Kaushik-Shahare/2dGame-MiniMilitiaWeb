@@ -17,7 +17,7 @@ const jetpack_fuel_regen = 0.06; // Fuel regeneration rate
 const jetpack_regen_delay = 2; // Delay before fuel regeneration starts (in ms);
 
 export default class Player {
-  constructor(x, y) {
+  constructor(x, y, isMainPlayer = true) {
     this.x = x;
     this.y = y;
     this.width = width;
@@ -28,6 +28,7 @@ export default class Player {
     this.jumpStrength = jumpStrength;
     this.speed = speed;
     this.onGround = false;
+    this.color = "blue";
 
     // Crouch state and height adjustment
     this.isCrouching = false;
@@ -44,13 +45,19 @@ export default class Player {
     // Gun
     this.gun = new Gun(this);
 
-    window.addEventListener("keydown", this.handleKeyDown.bind(this));
-    window.addEventListener("keyup", this.handleKeyUp.bind(this));
-    window.addEventListener(
-      "mousemove",
-      this.gun.handleMouseMove.bind(this.gun)
-    );
-    window.addEventListener("mousedown", (e) => this.gun.handleMouseDown(e));
+    if (!isMainPlayer) {
+      this.color = "red";
+    }
+
+    if (isMainPlayer === true) {
+      window.addEventListener("keydown", this.handleKeyDown.bind(this));
+      window.addEventListener("keyup", this.handleKeyUp.bind(this));
+      window.addEventListener(
+        "mousemove",
+        this.gun.handleMouseMove.bind(this.gun)
+      );
+      window.addEventListener("mousedown", (e) => this.gun.handleMouseDown(e));
+    }
   }
 
   handleKeyDown(e) {
@@ -79,8 +86,6 @@ export default class Player {
       e.key === "ControlRight"
     ) {
       this.isCrouching = true;
-      this.speed = speed / 3;
-      this.height = height * (3 / 4);
     }
   }
 
@@ -110,8 +115,6 @@ export default class Player {
       e.key === "ControlRight"
     ) {
       this.isCrouching = false;
-      this.speed = speed;
-      this.height = height;
     }
   }
 
@@ -135,6 +138,15 @@ export default class Player {
   update(environment) {
     this.y += this.velocityY;
     this.x += this.velocityX;
+
+    // Adjust player height when crouching
+    if (this.isCrouching) {
+      this.speed = speed / 3;
+      this.height = height * (3 / 4);
+    } else {
+      this.speed = speed;
+      this.height = height;
+    }
 
     // Apply gravity
     if (!this.isUsingJetpack) {
@@ -232,13 +244,13 @@ export default class Player {
   }
 
   render(ctx) {
-    ctx.fillStyle = "blue";
+    ctx.fillStyle = this.color;
     ctx.fillRect(this.x, this.y, this.width, this.height);
 
     this.gun.render(ctx);
 
-    // Draw jetpack fuel bar
-    ctx.fillStyle = "blue";
+    // Render jetpack fuel bar only for the main player
+    ctx.fillStyle = this.color;
     ctx.fillRect(
       this.x,
       this.y + this.height + 10,
@@ -264,6 +276,14 @@ export default class Player {
     this.x = x;
     this.y = y;
     this.isCrouching = isCrouching;
+
+    // Adjust player height when crouching
+    if (isCrouching) {
+      this.height = height * (3 / 4);
+    } else {
+      this.height = height;
+    }
+
     this.gun.gunAngle = gunAngle;
   }
 }
