@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Environment from "./Environment";
 import Player from "./Player";
+import Bullet from "./Bullet";
 
 const GameCanvas = ({ socket }) => {
   const canvasRef = useRef(null);
@@ -36,6 +37,11 @@ const GameCanvas = ({ socket }) => {
       // Render the opponent player
       if (opponentPlayer.current) {
         opponentPlayer.current.render(ctx);
+        opponentPlayer.current.gun.updateBullets(
+          environment,
+          fixedWidth,
+          fixedHeight
+        );
       }
 
       ctx.restore();
@@ -73,20 +79,38 @@ const GameCanvas = ({ socket }) => {
     const handleSocketMessage = (event) => {
       const data = JSON.parse(event.data);
 
-      if (data.type === "UPDATE_POSITION") {
-        const { clientId, position } = data;
+      switch (data.type) {
+        case "UPDATE_POSITION":
+          const { clientId, position } = data;
 
-        // Update opponent player position
-        if (!opponentPlayer.current) {
-          opponentPlayer.current = new Player(position.x, position.y, false); // Create opponent player if not exists
-        } else {
-          opponentPlayer.current.updatePosition(
-            position.x,
-            position.y,
-            position.isCrouching,
-            position.gunAngle
-          ); // Update opponent player's position
-        }
+          if (!opponentPlayer.current) {
+            opponentPlayer.current = new Player(position.x, position.y, false);
+          } else {
+            opponentPlayer.current.updatePosition(
+              position.x,
+              position.y,
+              position.isCrouching,
+              position.gunAngle
+            );
+          }
+          break;
+
+        case "SHOOT":
+          const { position: shootPosition } = data;
+
+          // Create a new bullet for the opponent
+          if (opponentPlayer.current) {
+            const bullet = new Bullet(
+              shootPosition.x,
+              shootPosition.y,
+              shootPosition.angle
+            );
+            opponentPlayer.current.gun.bullets.push(bullet);
+          }
+          break;
+
+        default:
+          break;
       }
     };
 
