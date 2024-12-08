@@ -16,6 +16,15 @@ export default class Bullet {
     this.sound.play();
   }
 
+  checkCollisionWithPlayer(player) {
+    return (
+      this.x >= player.x &&
+      this.x <= player.x + player.width &&
+      this.y >= player.y &&
+      this.y <= player.y + player.height
+    );
+  }
+
   update(environment, canvasWidth, canvasHeight) {
     this.x += this.velocityX;
     this.y += this.velocityY;

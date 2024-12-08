@@ -44,6 +44,58 @@ const GameCanvas = ({ socket }) => {
         );
       }
 
+      // Check collisions for bullets fired by the main player
+      player.current.gun.bullets = player.current.gun.bullets.filter(
+        (bullet) => {
+          if (
+            opponentPlayer.current &&
+            bullet.checkCollisionWithPlayer(opponentPlayer.current)
+          ) {
+            // Bullet hit opponent player
+            opponentPlayer.current.health -= 20;
+            if (opponentPlayer.current.health < 0) {
+              opponentPlayer.current.health = 0;
+            }
+            if (socket && socket.readyState === WebSocket.OPEN) {
+              socket.send(
+                JSON.stringify({
+                  type: "PLAYER_HIT",
+                  roomId: roomIdRef.current.value,
+                  health: opponentPlayer.current.health,
+                })
+              );
+            }
+            return false; // Remove bullet
+          }
+          return bullet.update(environment, canvas.width, canvas.height);
+        }
+      );
+
+      // Check collisions for bullets fired by the opponent player
+      if (opponentPlayer.current) {
+        opponentPlayer.current.gun.bullets =
+          opponentPlayer.current.gun.bullets.filter((bullet) => {
+            if (bullet.checkCollisionWithPlayer(player.current)) {
+              // Bullet hit main player
+              player.current.health -= 20;
+              if (player.current.health < 0) {
+                player.current.health = 0;
+              }
+              if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(
+                  JSON.stringify({
+                    type: "PLAYER_HIT",
+                    roomId: roomIdRef.current.value,
+                    health: player.current.health,
+                  })
+                );
+              }
+              return false; // Remove bullet
+            }
+            return bullet.update(environment, canvas.width, canvas.height);
+          });
+      }
+
       ctx.restore();
 
       // Send player position to the server
@@ -106,6 +158,12 @@ const GameCanvas = ({ socket }) => {
               shootPosition.angle
             );
             opponentPlayer.current.gun.bullets.push(bullet);
+          }
+          break;
+
+        case "PLAYER_HIT":
+          if (opponentPlayer.current) {
+            opponentPlayer.current.health = data.health;
           }
           break;
 

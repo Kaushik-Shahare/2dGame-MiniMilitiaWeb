@@ -98,6 +98,15 @@ wss.on("connection", (ws) => {
           }
           break;
 
+        case "PLAYER_HIT":
+          if (roomId && rooms.has(roomId)) {
+            broadcastToRoom(roomId, {
+              type: "PLAYER_HIT",
+              health: data.health,
+            });
+          }
+          break;
+
         default:
           console.error("Unknown message type:", data.type);
       }

@@ -3,6 +3,7 @@ import Gun from "./Gun";
 const fixedWidth = 1280; // Example width
 const fixedHeight = 720;
 
+const health = 100;
 const width = 50;
 const height = 70;
 const gravity = 1;
@@ -44,6 +45,8 @@ export default class Player {
 
     // Gun
     this.gun = new Gun(this);
+
+    this.health = health;
 
     if (!isMainPlayer) {
       this.color = "red";
@@ -220,6 +223,11 @@ export default class Player {
       this.velocityY = 0;
     }
 
+    // Ensure health does not go below 0
+    if (this.health < 0) {
+      this.health = 0;
+    }
+
     // Player Bounds
     if (this.x < 0) this.x = 0;
     if (this.x + this.width > canvasWidth) this.x = canvasWidth - this.width;
@@ -257,6 +265,12 @@ export default class Player {
       (this.jetpackFuel / jetpack_fuel_max) * this.width,
       5
     );
+
+    // Render health bar
+    ctx.fillStyle = "red";
+    ctx.fillRect(this.x, this.y - 10, this.width, 5);
+    ctx.fillStyle = "green";
+    ctx.fillRect(this.x, this.y - 10, (this.health / 100) * this.width, 5);
   }
 
   getPosition() {
