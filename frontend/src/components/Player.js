@@ -257,20 +257,23 @@ export default class Player {
 
     this.gun.render(ctx);
 
-    // Render jetpack fuel bar only for the main player
-    ctx.fillStyle = this.color;
-    ctx.fillRect(
-      this.x,
-      this.y + this.height + 10,
-      (this.jetpackFuel / jetpack_fuel_max) * this.width,
-      5
-    );
+    // Render health and jetpack fuel bars only for the main player
+    if (this.color === "blue") {
+      // Render health bar
+      ctx.fillStyle = "red";
+      ctx.fillRect(this.x, this.y - 10, this.width, 5);
+      ctx.fillStyle = "green";
+      ctx.fillRect(this.x, this.y - 10, (this.health / 100) * this.width, 5);
 
-    // Render health bar
-    ctx.fillStyle = "red";
-    ctx.fillRect(this.x, this.y - 10, this.width, 5);
-    ctx.fillStyle = "green";
-    ctx.fillRect(this.x, this.y - 10, (this.health / 100) * this.width, 5);
+      // Render jetpack fuel bar
+      ctx.fillStyle = this.color;
+      ctx.fillRect(
+        this.x,
+        this.y + this.height + 10,
+        (this.jetpackFuel / jetpack_fuel_max) * this.width,
+        5
+      );
+    }
   }
 
   getPosition() {

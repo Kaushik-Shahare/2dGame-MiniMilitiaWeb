@@ -44,6 +44,26 @@ const GameCanvas = ({ socket }) => {
         );
       }
 
+      // Render current player's health bar at the top right side
+      ctx.fillStyle = "red";
+      ctx.fillRect(fixedWidth - 210, 10, 200, 20);
+      ctx.fillStyle = "green";
+      ctx.fillRect(
+        fixedWidth - 210,
+        10,
+        (player.current.health / 100) * 200,
+        20
+      );
+
+      // Render current player's jetpack fuel bar below the health bar
+      ctx.fillStyle = "blue";
+      ctx.fillRect(
+        fixedWidth - 210,
+        40,
+        (player.current.jetpackFuel / 100) * 200,
+        20
+      );
+
       // Check collisions for bullets fired by the main player
       player.current.gun.bullets = player.current.gun.bullets.filter(
         (bullet) => {
