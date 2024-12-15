@@ -16,14 +16,39 @@ export default class Gun {
     this.gunSkin.src = "/Ak-47.png";
 
     this.bullets = [];
+    this.cursorPosition = {
+      x: player.x + player.width / 2,
+      y: player.y + player.height / 2,
+    };
   }
 
-  handleMouseMove(e) {
-    this.mouseX = e.clientX;
-    this.mouseY = e.clientY;
-    const dx = this.mouseX - (this.player.x + this.player.width / 2);
-    const dy = this.mouseY - (this.player.y + this.player.height / 2);
-    this.gunAngle = Math.atan2(dy, dx);
+  handleMouseMove(event) {
+    let movementX = event.movementX || 0;
+    let movementY = event.movementY || 0;
+
+    // Update cursor position with limits
+    this.cursorPosition.x += movementX;
+    this.cursorPosition.y += movementY;
+
+    // Calculate player's center
+    const playerCenterX = this.player.x + this.player.width / 2;
+    const playerCenterY = this.player.y + this.player.height / 2;
+
+    const dx = this.cursorPosition.x - playerCenterX;
+    const dy = this.cursorPosition.y - playerCenterY;
+    const distance = Math.hypot(dx, dy);
+
+    if (distance > 100) {
+      const angle = Math.atan2(dy, dx);
+      this.cursorPosition.x = playerCenterX + 100 * Math.cos(angle);
+      this.cursorPosition.y = playerCenterY + 100 * Math.sin(angle);
+    }
+
+    // Update gun angle
+    this.gunAngle = Math.atan2(
+      this.cursorPosition.y - playerCenterY,
+      this.cursorPosition.x - playerCenterX
+    );
   }
 
   handleMouseDown(socket = null, roomId = null) {
@@ -96,6 +121,12 @@ export default class Gun {
     }
 
     ctx.restore();
+
+    // Render custom cursor
+    ctx.fillStyle = "white";
+    ctx.beginPath();
+    ctx.arc(this.cursorPosition.x, this.cursorPosition.y, 5, 0, Math.PI * 2);
+    ctx.fill();
 
     // Render bullets
     this.bullets.forEach((bullet) => bullet.render(ctx));

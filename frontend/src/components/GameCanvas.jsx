@@ -12,6 +12,8 @@ const GameCanvas = ({ socket }) => {
   const animationFrameId = useRef(null);
   const fixedWidth = 1280; // Example width
   const fixedHeight = 720;
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const cursorPosition = useRef({ x: fixedWidth / 2, y: fixedHeight / 2 });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -145,7 +147,7 @@ const GameCanvas = ({ socket }) => {
       cancelAnimationFrame(animationFrameId.current);
       canvas.removeEventListener("mousedown", handleMouseDown);
     };
-  }, [socket]);
+  }, [socket, isFullScreen]);
 
   useEffect(() => {
     const handleSocketMessage = (event) => {
@@ -203,6 +205,33 @@ const GameCanvas = ({ socket }) => {
     };
   }, [socket]);
 
+  useEffect(() => {
+    const handleMouseMove = (event) => {
+      player.current.gun.handleMouseMove(event);
+    };
+
+    if (isFullScreen) {
+      canvasRef.current.requestPointerLock();
+      document.addEventListener("mousemove", handleMouseMove);
+    }
+
+    const handlePointerLockChange = () => {
+      if (document.pointerLockElement !== canvasRef.current) {
+        document.removeEventListener("mousemove", handleMouseMove);
+      }
+    };
+
+    document.addEventListener("pointerlockchange", handlePointerLockChange);
+
+    return () => {
+      document.removeEventListener(
+        "pointerlockchange",
+        handlePointerLockChange
+      );
+      document.removeEventListener("mousemove", handleMouseMove);
+    };
+  }, [isFullScreen]);
+
   const handleMouseDown = () => {
     if (player.current && roomIdRef.current) {
       player.current.gun.handleMouseDown(socket, roomIdRef.current.value);
@@ -241,11 +270,13 @@ const GameCanvas = ({ socket }) => {
   const toggleFullScreen = () => {
     const canvas = canvasRef.current;
     if (!document.fullscreenElement) {
-      canvas.requestFullscreen().catch((err) => {
-        alert(`Error attempting to enable full-screen mode: ${err.message}`);
+      canvas.requestFullscreen().then(() => {
+        setIsFullScreen(true);
       });
     } else {
-      document.exitFullscreen();
+      document.exitFullscreen().then(() => {
+        setIsFullScreen(false);
+      });
     }
   };
 
