@@ -13,8 +13,9 @@ class Environment {
     this.groundImage.src = "/surface.png"; // Set your ground image path here
 
     this.obstacles = [
-      { x: 300, y: fixedHeight - 250, width: 100, height: 50 },
+      { x: 400, y: fixedHeight - 250, width: 100, height: 50 },
       { x: 300, y: fixedHeight - 450, width: 100, height: 50 },
+      { x: 600, y: fixedHeight - 550, width: 100, height: 50 },
     ];
   }
 
@@ -42,21 +43,6 @@ class Environment {
 
     return false; // No collision
   }
-
-  // checkCollision(x, y, width, height) {
-  //   // Check collision with obstacles
-  //   for (let obs of this.obstacles) {
-  //     if (
-  //       x < obs.x + obs.width &&
-  //       x + width > obs.x &&
-  //       y < obs.y + obs.height &&
-  //       y + height > obs.y
-  //     ) {
-  //       return true; // Collision detected
-  //     }
-  //   }
-  //   return false; // No collision
-  // }
 
   checkCollisionOnX(x, y, width, height, velocityX) {
     // Check collision with obstacles

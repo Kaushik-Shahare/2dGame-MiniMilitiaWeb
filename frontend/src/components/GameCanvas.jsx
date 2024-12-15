@@ -238,9 +238,20 @@ const GameCanvas = ({ socket }) => {
     }
   };
 
+  const toggleFullScreen = () => {
+    const canvas = canvasRef.current;
+    if (!document.fullscreenElement) {
+      canvas.requestFullscreen().catch((err) => {
+        alert(`Error attempting to enable full-screen mode: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
   return (
     <div style={{ position: "relative", height: "100vh", overflow: "hidden" }}>
-      <canvas ref={canvasRef} />
+      <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />
       <div
         style={{
           position: "absolute",
@@ -298,6 +309,22 @@ const GameCanvas = ({ socket }) => {
           }}
         >
           Join Room
+        </button>
+        <button
+          onClick={toggleFullScreen}
+          style={{
+            display: "block",
+            width: "100%",
+            padding: "10px",
+            border: "none",
+            borderRadius: "5px",
+            backgroundColor: "#f44336",
+            color: "white",
+            fontWeight: "bold",
+            cursor: "pointer",
+          }}
+        >
+          Toggle Fullscreen
         </button>
       </div>
     </div>

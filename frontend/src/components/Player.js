@@ -189,14 +189,7 @@ export default class Player {
       this.onGround = false;
     }
 
-    // Handle collision with obstacles
-    // if (environment.checkCollision(this.x, this.y, this.width, this.height)) {
-    //   this.x -= this.velocityX;
-    //   this.y -= this.velocityY;
-    //   this.velocityX = 0;
-    //   this.velocityY = 0;
-    // }
-
+    // Check for collisions on the x and y axes
     if (
       environment.checkCollisionOnX(
         this.x,
