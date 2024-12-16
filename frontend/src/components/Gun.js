@@ -113,8 +113,8 @@ export default class Gun {
         -imgHeight / 2,
 
         // gun dimentions
-        imgWidth,
-        imgHeight
+        imgWidth - 15,
+        imgHeight - 5
       );
     } else {
       // Fallback: Render a rectangle if the image isn't loaded

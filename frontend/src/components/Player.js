@@ -1,4 +1,5 @@
 import Gun from "./Gun";
+import PlayerSkin from "./PlayerSkin";
 
 const fixedWidth = 1280; // Example width
 const fixedHeight = 720;
@@ -6,13 +7,13 @@ const fixedHeight = 720;
 const health = 100;
 const width = 50;
 const height = 70;
-const gravity = 1;
+const gravity = 0.8;
 const jumpStrength = -15;
 const speed = 5;
 
 const jetpack_fuel_max = 100;
 const jetpack_force = -0.4; // Upward force from the jetpack
-const jetpack_force_max = -10; // Maximum upward force from the jetpack
+const jetpack_force_max = -4.5; // Maximum upward force from the jetpack
 const jetpack_fuel_depletion = 0.4; // Fuel depletion rate
 const jetpack_fuel_regen = 0.06; // Fuel regeneration rate
 const jetpack_regen_delay = 2; // Delay before fuel regeneration starts (in ms);
@@ -62,18 +63,8 @@ export default class Player {
       window.addEventListener("mousedown", (e) => this.gun.handleMouseDown(e));
     }
 
-    // Load player image
-    this.playerImage = new Image();
-    this.playerImage.src = isMainPlayer
-      ? "/main-player.png"
-      : "/opponent-player.png";
-    this.playerImage.onload = () => {
-      this.imageLoaded = true;
-    };
-    this.playerImage.onerror = () => {
-      console.error("Failed to load player image");
-      this.imageLoaded = false;
-    };
+    // Initialize PlayerSkin
+    this.playerSkin = new PlayerSkin(isMainPlayer);
   }
 
   handleKeyDown(e) {
@@ -266,19 +257,14 @@ export default class Player {
       ctx.scale(-1, 1);
     }
 
-    if (this.imageLoaded) {
-      ctx.drawImage(
-        this.playerImage,
-        -this.width / 2,
-        -this.height / 2,
-        this.width,
-        this.height
-      );
-    } else {
-      // Fallback: Render a rectangle if the image isn't loaded
-      ctx.fillStyle = this.color;
-      ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
-    }
+    // Render the player skin
+    this.playerSkin.render(
+      ctx,
+      this.width,
+      this.height,
+      this.isUsingJetpack,
+      this.velocityX
+    );
 
     ctx.restore();
 

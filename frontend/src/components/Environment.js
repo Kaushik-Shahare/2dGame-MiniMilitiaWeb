@@ -12,6 +12,9 @@ class Environment {
     this.groundImage = new Image();
     this.groundImage.src = "/surface.png"; // Set your ground image path here
 
+    this.treeImage = new Image();
+    this.treeImage.src = "/sprite/tree.png";
+
     this.obstacles = [
       { x: 400, y: fixedHeight - 250, width: 100, height: 50 },
       { x: 300, y: fixedHeight - 450, width: 100, height: 50 },
@@ -123,6 +126,23 @@ class Environment {
     this.obstacles.forEach((obs) => {
       ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
     });
+
+    // Draw tree
+    ctx.drawImage(
+      this.treeImage,
+      100,
+      this.groundLevel - this.treeImage.height + 226,
+      300,
+      400
+    );
+
+    ctx.drawImage(
+      this.treeImage,
+      600,
+      this.groundLevel - this.treeImage.height + 226,
+      300,
+      400
+    );
 
     ctx.restore();
   }
