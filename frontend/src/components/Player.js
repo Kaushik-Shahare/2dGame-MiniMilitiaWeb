@@ -61,6 +61,19 @@ export default class Player {
       );
       window.addEventListener("mousedown", (e) => this.gun.handleMouseDown(e));
     }
+
+    // Load player image
+    this.playerImage = new Image();
+    this.playerImage.src = isMainPlayer
+      ? "/main-player.png"
+      : "/opponent-player.png";
+    this.playerImage.onload = () => {
+      this.imageLoaded = true;
+    };
+    this.playerImage.onerror = () => {
+      console.error("Failed to load player image");
+      this.imageLoaded = false;
+    };
   }
 
   handleKeyDown(e) {
@@ -245,8 +258,29 @@ export default class Player {
   }
 
   render(ctx) {
-    ctx.fillStyle = this.color;
-    ctx.fillRect(this.x, this.y, this.width, this.height);
+    ctx.save();
+    ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+
+    // Rotate the player if aiming left
+    if (this.gun.gunAngle < -Math.PI / 2 || this.gun.gunAngle > Math.PI / 2) {
+      ctx.scale(-1, 1);
+    }
+
+    if (this.imageLoaded) {
+      ctx.drawImage(
+        this.playerImage,
+        -this.width / 2,
+        -this.height / 2,
+        this.width,
+        this.height
+      );
+    } else {
+      // Fallback: Render a rectangle if the image isn't loaded
+      ctx.fillStyle = this.color;
+      ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
+    }
+
+    ctx.restore();
 
     this.gun.render(ctx);
   }

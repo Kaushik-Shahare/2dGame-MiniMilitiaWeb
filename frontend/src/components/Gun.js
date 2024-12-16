@@ -98,14 +98,21 @@ export default class Gun {
     );
     ctx.rotate(this.gunAngle);
 
+    if (this.gunAngle < -Math.PI / 2 || this.gunAngle > Math.PI / 2) {
+      ctx.scale(1, -1);
+    }
     // Draw the gun skin
     if (this.gunSkin.complete) {
       const imgWidth = this.gunLength + 30;
       const imgHeight = this.gunWidth + 20;
       ctx.drawImage(
         this.gunSkin,
-        this.gunLength / 2,
+        // gun offset
+        // this.gunLength / 2,
+        0,
         -imgHeight / 2,
+
+        // gun dimentions
         imgWidth,
         imgHeight
       );
@@ -113,8 +120,12 @@ export default class Gun {
       // Fallback: Render a rectangle if the image isn't loaded
       ctx.fillStyle = "red";
       ctx.fillRect(
-        this.gunLength / 2,
+        // gun offset
+        // this.gunLength / 2,
+        0,
         -this.gunWidth / 2,
+
+        // gun dimentions
         this.gunLength,
         this.gunWidth
       );
