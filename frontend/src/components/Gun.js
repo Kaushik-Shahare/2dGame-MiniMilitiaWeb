@@ -133,10 +133,33 @@ export default class Gun {
 
     ctx.restore();
 
-    // Render custom cursor
-    ctx.fillStyle = "white";
+    // Render custom cursor as two dots on the same imaginary line
+    const dotDistance = 20; // Distance between the two dots
+    const angle = Math.atan2(
+      this.cursorPosition.y - (this.player.y + this.player.height / 2),
+      this.cursorPosition.x - (this.player.x + this.player.width / 2)
+    );
+
+    const dot1X = this.cursorPosition.x - Math.cos(angle) * dotDistance;
+    const dot1Y = this.cursorPosition.y - Math.sin(angle) * dotDistance;
+    const dot2X = this.cursorPosition.x + Math.cos(angle) * dotDistance;
+    const dot2Y = this.cursorPosition.y + Math.sin(angle) * dotDistance;
+    const dot3X = this.cursorPosition.x;
+    const dot3Y = this.cursorPosition.y;
+
+    ctx.fillStyle = "black";
     ctx.beginPath();
-    ctx.arc(this.cursorPosition.x, this.cursorPosition.y, 5, 0, Math.PI * 2);
+    ctx.arc(dot1X, dot1Y, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "black";
+    ctx.beginPath();
+    ctx.arc(dot2X, dot2Y, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "black";
+    ctx.beginPath();
+    ctx.arc(dot3X, dot3Y, 2, 0, Math.PI * 2);
     ctx.fill();
 
     // Render bullets

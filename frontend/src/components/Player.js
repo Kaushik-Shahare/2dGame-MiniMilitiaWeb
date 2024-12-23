@@ -8,7 +8,7 @@ const health = 100;
 const width = 50;
 const height = 70;
 const gravity = 0.8;
-const jumpStrength = -15;
+const jumpStrength = -10;
 const speed = 5;
 
 const jetpack_fuel_max = 100;
@@ -183,12 +183,12 @@ export default class Player {
       this.velocityY = 0;
       if (!this.onGround) {
         this.onGround = true;
-        clearTimeout(this.jetpackRegenTimeout);
-        this.jetpackRegenTimeout = setTimeout(
-          () => this.regenerateFuel(),
-          jetpack_regen_delay
-        );
       }
+      clearTimeout(this.jetpackRegenTimeout);
+      this.jetpackRegenTimeout = setTimeout(
+        () => this.regenerateFuel(),
+        jetpack_regen_delay
+      );
     } else {
       this.onGround = false;
     }
