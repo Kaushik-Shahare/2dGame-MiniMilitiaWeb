@@ -108,14 +108,14 @@ wss.on("connection", (ws) => {
 
         case "PLAYER_HIT":
           if (roomId && rooms.has(roomId)) {
-            // data should have: clientId, health, attackerId
+            // Update the hit player's health in room state
             rooms.get(roomId).health[data.clientId] = data.health;
+            // Broadcast the complete health object so each client can update properly
             broadcastToRoom(roomId, {
               type: "PLAYER_HIT",
-              clientId: data.clientId,
-              health: data.health,
+              health: rooms.get(roomId).health,
             });
-            // When a player's health falls to 0, update score and schedule respawn
+            // When health falls to 0, handle death and respawn logic
             if (data.health <= 0) {
               rooms.get(roomId).scores[data.attackerId] =
                 (rooms.get(roomId).scores[data.attackerId] || 0) + 10;

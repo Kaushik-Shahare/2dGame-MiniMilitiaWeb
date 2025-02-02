@@ -219,8 +219,19 @@ const GameCanvas = ({ socket }) => {
           break;
 
         case "PLAYER_HIT":
-          if (opponentPlayer.current) {
-            opponentPlayer.current.health = data.health;
+          // data.health is an object mapping playerId -> health
+          const healthData = data.health;
+          if (healthData && typeof healthData === "object") {
+            if (healthData[player.current.id] !== undefined) {
+              player.current.health = healthData[player.current.id];
+            }
+            if (
+              opponentPlayer.current &&
+              healthData[opponentPlayer.current.id] !== undefined
+            ) {
+              opponentPlayer.current.health =
+                healthData[opponentPlayer.current.id];
+            }
           }
           break;
 
