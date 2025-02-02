@@ -20,6 +20,9 @@ const jetpack_regen_delay = 2; // Delay before fuel regeneration starts (in ms);
 
 export default class Player {
   constructor(x, y, isMainPlayer = true) {
+    // Assign a unique id to each player instance
+    this.id = Math.random().toString(36).substring(2, 10);
+
     this.x = x;
     this.y = y;
     this.width = width;
@@ -274,6 +277,29 @@ export default class Player {
     ctx.restore();
 
     this.gun.render(ctx);
+
+    // New: Render player id below the character and health bar above
+    ctx.save();
+    ctx.font = "14px Arial";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "white";
+    // Draw the player id below the sprite
+    ctx.fillText(this.id, this.x + this.width / 2, this.y + this.height + 15);
+    // Draw health bar above the sprite
+    const healthBarWidth = this.width;
+    const healthBarHeight = 5;
+    // Draw background (red)
+    ctx.fillStyle = "red";
+    ctx.fillRect(this.x, this.y - 10, healthBarWidth, healthBarHeight);
+    // Draw current health (green)
+    ctx.fillStyle = "green";
+    ctx.fillRect(
+      this.x,
+      this.y - 10,
+      (this.health / 100) * healthBarWidth,
+      healthBarHeight
+    );
+    ctx.restore();
   }
 
   getPosition() {
@@ -306,6 +332,11 @@ export default class Player {
 
   respawn() {
     this.isDead = false;
-    this.health = 100;
+    this.health = health; // health constant defined above (100)
+    // Reset to spawn coordinates (ensure these match your level design)
+    this.x = 100;
+    this.y = 500;
+    this.velocityX = 0;
+    this.velocityY = 0;
   }
 }

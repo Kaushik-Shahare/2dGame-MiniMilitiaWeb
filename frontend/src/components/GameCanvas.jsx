@@ -15,7 +15,8 @@ const GameCanvas = ({ socket }) => {
   const fixedHeight = 720;
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isRoomDialogOpen, setIsRoomDialogOpen] = useState(true);
-  const [score, setScore] = useState(0);
+  const [localScore, setLocalScore] = useState(0);
+  const [opponentScore, setOpponentScore] = useState(0);
   const [timer, setTimer] = useState(300); // 5 minutes timer
   const [isRespawning, setIsRespawning] = useState(false);
   const [isOpponentDead, setIsOpponentDead] = useState(false);
@@ -77,7 +78,7 @@ const GameCanvas = ({ socket }) => {
       // Render game score
       ctx.fillStyle = "white";
       ctx.font = "20px Arial";
-      ctx.fillText(`Score: ${score}`, 550, 30);
+      ctx.fillText(`${localScore} | ${opponentScore}`, 550, 30);
 
       // Render game timer
       const minutes = Math.floor(timer / 60);
@@ -95,22 +96,19 @@ const GameCanvas = ({ socket }) => {
             opponentPlayer.current &&
             bullet.checkCollisionWithPlayer(opponentPlayer.current)
           ) {
-            // Bullet hit opponent player
-            opponentPlayer.current.health -= 20;
-            if (opponentPlayer.current.health <= 0) {
-              opponentPlayer.current.health = 0;
-              handlePlayerDeath(opponentPlayer.current.id);
-            }
+            // Calculate new health without directly mutating local object
+            const newHealth = Math.max(opponentPlayer.current.health - 20, 0);
             if (socket && socket.readyState === WebSocket.OPEN) {
               socket.send(
                 JSON.stringify({
                   type: "PLAYER_HIT",
                   roomId: roomIdRef.current.value,
-                  health: opponentPlayer.current.health,
+                  clientId: opponentPlayer.current.id,
+                  health: newHealth,
+                  attackerId: player.current.id,
                 })
               );
             }
-            setScore((prevScore) => prevScore + 10); // Increase score
             return false; // Remove bullet
           }
           return bullet.update(environment, canvas.width, canvas.height);
@@ -124,16 +122,17 @@ const GameCanvas = ({ socket }) => {
             if (bullet.checkCollisionWithPlayer(player.current)) {
               // Bullet hit main player
               player.current.health -= 20;
-              if (player.current.health <= 0) {
+              if (player.current.health < 0) {
                 player.current.health = 0;
-                handlePlayerDeath(player.current.id);
               }
               if (socket && socket.readyState === WebSocket.OPEN) {
                 socket.send(
                   JSON.stringify({
                     type: "PLAYER_HIT",
                     roomId: roomIdRef.current.value,
+                    clientId: player.current.id,
                     health: player.current.health,
+                    attackerId: opponentPlayer.current.id,
                   })
                 );
               }
@@ -172,7 +171,15 @@ const GameCanvas = ({ socket }) => {
       cancelAnimationFrame(animationFrameId.current);
       canvas.removeEventListener("mousedown", handleMouseDown);
     };
-  }, [socket, isFullScreen, score, timer, isRespawning, isOpponentDead]);
+  }, [
+    socket,
+    isFullScreen,
+    localScore,
+    opponentScore,
+    timer,
+    isRespawning,
+    isOpponentDead,
+  ]);
 
   useEffect(() => {
     const handleSocketMessage = (event) => {
@@ -181,10 +188,13 @@ const GameCanvas = ({ socket }) => {
       switch (data.type) {
         case "UPDATE_POSITION":
           const { clientId, position } = data;
-
           if (!opponentPlayer.current) {
             opponentPlayer.current = new Player(position.x, position.y, false);
+            opponentPlayer.current.id = clientId; // assign opponent id
           } else {
+            if (!opponentPlayer.current.id) {
+              opponentPlayer.current.id = clientId; // ensure id is set
+            }
             opponentPlayer.current.updatePosition(
               position.x,
               position.y,
@@ -216,23 +226,35 @@ const GameCanvas = ({ socket }) => {
 
         case "PLAYER_DEATH":
           if (data.playerId === player.current.id) {
-            setIsRespawning(true);
+            // If current player dies, update opponent score if applicable and mark as dead.
+            if (
+              opponentPlayer.current &&
+              data.attackerId === opponentPlayer.current.id
+            ) {
+              setOpponentScore((prev) => prev + 10);
+            }
             player.current.isDead = true;
-            setTimeout(() => {
-              player.current.respawn();
-              setIsRespawning(false);
-            }, 5000);
+            setIsRespawning(true);
+            // Removed duplicate setTimeout respawn here; will wait for PLAYER_RESPAWN event.
           } else if (
             opponentPlayer.current &&
             data.playerId === opponentPlayer.current.id
           ) {
-            setIsOpponentDead(true);
+            // If opponent dies, update local score and mark opponent as dead.
+            if (data.attackerId === player.current.id) {
+              setLocalScore((prev) => prev + 10);
+            }
             opponentPlayer.current.isDead = true;
+            setIsOpponentDead(true);
+            // Removed duplicate setTimeout respawn here.
           }
           break;
 
         case "PLAYER_RESPAWN":
-          if (
+          if (data.playerId === player.current.id) {
+            player.current.respawn();
+            setIsRespawning(false);
+          } else if (
             opponentPlayer.current &&
             data.playerId === opponentPlayer.current.id
           ) {
@@ -302,7 +324,7 @@ const GameCanvas = ({ socket }) => {
     socket.send(
       JSON.stringify({
         type: "CREATE_ROOM",
-        clientId: socket.id,
+        clientId: player.current.id, // use current player's id
       })
     );
 
@@ -321,7 +343,7 @@ const GameCanvas = ({ socket }) => {
         JSON.stringify({
           type: "JOIN_ROOM",
           roomId,
-          clientId: socket.id,
+          clientId: player.current.id, // use current player's id
         })
       );
     }

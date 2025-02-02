@@ -108,12 +108,33 @@ wss.on("connection", (ws) => {
 
         case "PLAYER_HIT":
           if (roomId && rooms.has(roomId)) {
+            // data should have: clientId, health, attackerId
             rooms.get(roomId).health[data.clientId] = data.health;
             broadcastToRoom(roomId, {
               type: "PLAYER_HIT",
               clientId: data.clientId,
               health: data.health,
             });
+            // When a player's health falls to 0, update score and schedule respawn
+            if (data.health <= 0) {
+              rooms.get(roomId).scores[data.attackerId] =
+                (rooms.get(roomId).scores[data.attackerId] || 0) + 10;
+              rooms.get(roomId).dead[data.clientId] = true;
+              broadcastToRoom(roomId, {
+                type: "PLAYER_DEATH",
+                playerId: data.clientId,
+                attackerId: data.attackerId,
+              });
+              setTimeout(() => {
+                rooms.get(roomId).dead[data.clientId] = false;
+                rooms.get(roomId).health[data.clientId] = 100;
+                broadcastToRoom(roomId, {
+                  type: "PLAYER_RESPAWN",
+                  playerId: data.clientId,
+                  health: 100,
+                });
+              }, 5000);
+            }
           }
           break;
 
@@ -168,23 +189,10 @@ function generateRoomId() {
 }
 
 // Broadcast to all clients in a specific room
-function broadcastToRoom(roomId, message) {
+function broadcastToRoom(roomId, message, excludeClient = null) {
   if (rooms.has(roomId)) {
     rooms.get(roomId).players.forEach((client) => {
-      try {
-        client.send(JSON.stringify(message));
-      } catch (err) {
-        console.error("Error sending message to client:", err.message);
-      }
-    });
-  }
-}
-
-// Broadcast to all clients in a specific room except one(sender)
-function broadcastToRoom(roomId, message, clientId) {
-  if (rooms.has(roomId)) {
-    rooms.get(roomId).players.forEach((client) => {
-      if (client !== clientId) {
+      if (client !== excludeClient) {
         try {
           client.send(JSON.stringify(message));
         } catch (err) {
