@@ -48,6 +48,7 @@ export default class Player {
     this.gun = new Gun(this);
 
     this.health = health;
+    this.isDead = false; // Initialize dead flag
 
     if (!isMainPlayer) {
       this.color = "red";
@@ -143,6 +144,8 @@ export default class Player {
   }
 
   update(environment) {
+    if (this.isDead) return; // Do not update if the player is dead
+
     this.y += this.velocityY;
     this.x += this.velocityX;
 
@@ -249,6 +252,8 @@ export default class Player {
   }
 
   render(ctx) {
+    if (this.isDead) return; // Do not render if the player is dead
+
     ctx.save();
     ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
 
@@ -297,5 +302,10 @@ export default class Player {
     }
 
     this.gun.gunAngle = gunAngle;
+  }
+
+  respawn() {
+    this.isDead = false;
+    this.health = 100;
   }
 }

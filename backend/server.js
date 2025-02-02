@@ -25,7 +25,7 @@ const server = app.listen(PORT, () => {
 const wss = new WebSocket.Server({ server });
 
 // Store rooms
-const rooms = new Map(); // roomId -> Set of clients
+const rooms = new Map(); // roomId -> { players: Set of clients, scores: {}, health: {}, dead: {} }
 
 // WebSocket connection handling
 wss.on("connection", (ws) => {
@@ -42,8 +42,13 @@ wss.on("connection", (ws) => {
         case "CREATE_ROOM":
           // Generate a unique room ID
           roomId = generateRoomId();
-          rooms.set(roomId, new Set());
-          rooms.get(roomId).add(ws);
+          rooms.set(roomId, {
+            players: new Set(),
+            scores: {},
+            health: {},
+            dead: {},
+          });
+          rooms.get(roomId).players.add(ws);
           clientId = data.clientId;
           ws.send(JSON.stringify({ type: "ROOM_CREATED", roomId }));
           console.log(`Room created: ${roomId}`);
@@ -51,8 +56,11 @@ wss.on("connection", (ws) => {
 
         case "JOIN_ROOM":
           roomId = data.roomId;
-          if (rooms.has(roomId) && rooms.get(roomId).size < 2) {
-            rooms.get(roomId).add(ws);
+          if (rooms.has(roomId) && rooms.get(roomId).players.size < 2) {
+            rooms.get(roomId).players.add(ws);
+            rooms.get(roomId).scores[data.clientId] = 0;
+            rooms.get(roomId).health[data.clientId] = 100; // Initialize health
+            rooms.get(roomId).dead[data.clientId] = false; // Initialize dead flag
             clientId = data.clientId;
             ws.send(JSON.stringify({ type: "ROOM_JOINED", roomId }));
             broadcastToRoom(roomId, {
@@ -100,10 +108,27 @@ wss.on("connection", (ws) => {
 
         case "PLAYER_HIT":
           if (roomId && rooms.has(roomId)) {
+            rooms.get(roomId).health[data.clientId] = data.health;
             broadcastToRoom(roomId, {
               type: "PLAYER_HIT",
+              clientId: data.clientId,
               health: data.health,
             });
+          }
+          break;
+
+        case "PLAYER_DEATH":
+          if (roomId && rooms.has(roomId)) {
+            rooms.get(roomId).scores[data.playerId] += 10; // Add score to the player who killed
+            rooms.get(roomId).dead[data.playerId] = true; // Set dead flag
+            broadcastToRoom(roomId, data);
+            setTimeout(() => {
+              rooms.get(roomId).dead[data.playerId] = false; // Reset dead flag
+              broadcastToRoom(roomId, {
+                type: "PLAYER_RESPAWN",
+                playerId: data.playerId,
+              });
+            }, 5000); // Respawn player after 5 seconds
           }
           break;
 
@@ -117,12 +142,15 @@ wss.on("connection", (ws) => {
 
   ws.on("close", () => {
     if (roomId && rooms.has(roomId)) {
-      rooms.get(roomId).delete(ws);
+      rooms.get(roomId).players.delete(ws);
+      delete rooms.get(roomId).scores[clientId];
+      delete rooms.get(roomId).health[clientId];
+      delete rooms.get(roomId).dead[clientId];
       broadcastToRoom(roomId, { type: "PLAYER_LEFT", clientId });
       console.log(`Client ${clientId} disconnected from room: ${roomId}`);
 
       // Clean up empty room
-      if (rooms.get(roomId).size === 0) {
+      if (rooms.get(roomId).players.size === 0) {
         rooms.delete(roomId);
         console.log(`Room ${roomId} deleted`);
       }
@@ -142,7 +170,7 @@ function generateRoomId() {
 // Broadcast to all clients in a specific room
 function broadcastToRoom(roomId, message) {
   if (rooms.has(roomId)) {
-    rooms.get(roomId).forEach((client) => {
+    rooms.get(roomId).players.forEach((client) => {
       try {
         client.send(JSON.stringify(message));
       } catch (err) {
@@ -155,7 +183,7 @@ function broadcastToRoom(roomId, message) {
 // Broadcast to all clients in a specific room except one(sender)
 function broadcastToRoom(roomId, message, clientId) {
   if (rooms.has(roomId)) {
-    rooms.get(roomId).forEach((client) => {
+    rooms.get(roomId).players.forEach((client) => {
       if (client !== clientId) {
         try {
           client.send(JSON.stringify(message));
