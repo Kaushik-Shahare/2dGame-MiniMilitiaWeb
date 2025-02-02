@@ -25,7 +25,7 @@ const server = app.listen(PORT, () => {
 const wss = new WebSocket.Server({ server });
 
 // Store rooms
-const rooms = new Map(); // roomId -> { players: Set of clients, scores: {}, health: {}, dead: {} }
+const rooms = new Map(); // roomId -> { players: Set of clients, scores: {}, health: {}, dead: {}, roundTime: number, timerInterval: NodeJS.Timeout }
 
 // WebSocket connection handling
 wss.on("connection", (ws) => {
@@ -47,11 +47,26 @@ wss.on("connection", (ws) => {
             scores: {},
             health: {},
             dead: {},
+            roundTime: 300, // starting round time in seconds
           });
           rooms.get(roomId).players.add(ws);
           clientId = data.clientId;
           ws.send(JSON.stringify({ type: "ROOM_CREATED", roomId }));
           console.log(`Room created: ${roomId}`);
+          // Start a timer for the room to broadcast roundTime updates
+          rooms.get(roomId).timerInterval = setInterval(() => {
+            const room = rooms.get(roomId);
+            if (!room) return;
+            room.roundTime -= 1;
+            broadcastToRoom(roomId, {
+              type: "ROUND_TIME",
+              roundTime: room.roundTime,
+            });
+            if (room.roundTime <= 0) {
+              clearInterval(room.timerInterval);
+              broadcastToRoom(roomId, { type: "ROUND_OVER" });
+            }
+          }, 1000);
           break;
 
         case "JOIN_ROOM":
@@ -125,6 +140,11 @@ wss.on("connection", (ws) => {
                 playerId: data.clientId,
                 attackerId: data.attackerId,
               });
+              // New: Broadcast scores update so that both clients are in-sync
+              broadcastToRoom(roomId, {
+                type: "SCORE_UPDATE",
+                scores: rooms.get(roomId).scores,
+              });
               setTimeout(() => {
                 rooms.get(roomId).dead[data.clientId] = false;
                 rooms.get(roomId).health[data.clientId] = 100;
@@ -140,7 +160,6 @@ wss.on("connection", (ws) => {
 
         case "PLAYER_DEATH":
           if (roomId && rooms.has(roomId)) {
-            rooms.get(roomId).scores[data.playerId] += 10; // Add score to the player who killed
             rooms.get(roomId).dead[data.playerId] = true; // Set dead flag
             broadcastToRoom(roomId, data);
             setTimeout(() => {
@@ -172,6 +191,7 @@ wss.on("connection", (ws) => {
 
       // Clean up empty room
       if (rooms.get(roomId).players.size === 0) {
+        clearInterval(rooms.get(roomId).timerInterval); // Clear the timer interval
         rooms.delete(roomId);
         console.log(`Room ${roomId} deleted`);
       }

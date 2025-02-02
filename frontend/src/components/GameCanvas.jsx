@@ -99,10 +99,11 @@ const GameCanvas = ({ socket }) => {
             // Calculate new health without directly mutating local object
             const newHealth = Math.max(opponentPlayer.current.health - 20, 0);
             if (socket && socket.readyState === WebSocket.OPEN) {
+              const roomId = roomIdRef.current ? roomIdRef.current.value : "";
               socket.send(
                 JSON.stringify({
                   type: "PLAYER_HIT",
-                  roomId: roomIdRef.current.value,
+                  roomId, // safe access
                   clientId: opponentPlayer.current.id,
                   health: newHealth,
                   attackerId: player.current.id,
@@ -126,10 +127,11 @@ const GameCanvas = ({ socket }) => {
                 player.current.health = 0;
               }
               if (socket && socket.readyState === WebSocket.OPEN) {
+                const roomId = roomIdRef.current ? roomIdRef.current.value : "";
                 socket.send(
                   JSON.stringify({
                     type: "PLAYER_HIT",
-                    roomId: roomIdRef.current.value,
+                    roomId, // safe access
                     clientId: player.current.id,
                     health: player.current.health,
                     attackerId: opponentPlayer.current.id,
@@ -146,10 +148,11 @@ const GameCanvas = ({ socket }) => {
 
       // Send player position to the server
       if (socket && socket.readyState === WebSocket.OPEN) {
+        const roomId = roomIdRef.current ? roomIdRef.current.value : "";
         socket.send(
           JSON.stringify({
             type: "MOVE",
-            roomId: roomIdRef.current.value,
+            roomId, // safe access
             position: {
               x: player.current.x,
               y: player.current.y,
@@ -274,6 +277,26 @@ const GameCanvas = ({ socket }) => {
           }
           break;
 
+        // New: Handle round time from server
+        case "ROUND_TIME":
+          setTimer(data.roundTime);
+          break;
+        // New: Handle score update from server
+        case "SCORE_UPDATE":
+          if (data.scores) {
+            const localId = player.current.id;
+            setLocalScore(data.scores[localId] || 0);
+            const opponentId = opponentPlayer.current
+              ? opponentPlayer.current.id
+              : null;
+            setOpponentScore(
+              opponentId && data.scores[opponentId]
+                ? data.scores[opponentId]
+                : 0
+            );
+          }
+          break;
+
         default:
           break;
       }
@@ -317,13 +340,13 @@ const GameCanvas = ({ socket }) => {
     };
   }, [isFullScreen]);
 
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      setTimer((prevTimer) => (prevTimer > 0 ? prevTimer - 1 : 0));
-    }, 1000);
-
-    return () => clearInterval(intervalId);
-  }, []);
+  // Remove or comment out the local timer decrement effect:
+  // useEffect(() => {
+  //   const intervalId = setInterval(() => {
+  //     setTimer((prevTimer) => (prevTimer > 0 ? prevTimer - 1 : 0));
+  //   }, 1000);
+  //   return () => clearInterval(intervalId);
+  // }, []);
 
   const handleMouseDown = () => {
     if (player.current && roomIdRef.current) {
@@ -341,13 +364,14 @@ const GameCanvas = ({ socket }) => {
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      if (data.type === "ROOM_CREATED") {
+      if (data.type === "ROOM_CREATED" && roomIdRef.current) {
         roomIdRef.current.value = data.roomId;
       }
     };
   };
 
   const joinRoom = () => {
+    if (!roomIdRef.current) return;
     const roomId = roomIdRef.current.value; // Get the value from the textarea
     if (roomId) {
       socket.send(
@@ -375,10 +399,11 @@ const GameCanvas = ({ socket }) => {
 
   const handlePlayerDeath = (playerId) => {
     if (socket && socket.readyState === WebSocket.OPEN) {
+      const roomId = roomIdRef.current ? roomIdRef.current.value : "";
       socket.send(
         JSON.stringify({
           type: "PLAYER_DEATH",
-          roomId: roomIdRef.current.value,
+          roomId, // safe access
           playerId,
         })
       );

@@ -11,91 +11,112 @@ const RoomDialog = ({
   if (!isOpen) return null;
 
   return (
-    <div className="room-dialog-overlay">
-      <div className="room-dialog">
-        <button className="close-button" onClick={onClose}>
-          &times;
-        </button>
-        <div>
-          <div
-            style={{
-              position: "absolute",
-              top: "10px",
-              left: "10px",
-              backgroundColor: "rgba(0, 0, 0, 0.7)",
-              padding: "15px",
-              borderRadius: "8px",
-              color: "white",
-              boxShadow: "0px 4px 8px rgba(0, 0, 0, 0.2)",
-              maxWidth: "200px",
-            }}
-          >
-            <button
-              onClick={createRoom}
-              style={{
-                display: "block",
-                width: "100%",
-                padding: "10px",
-                marginBottom: "10px",
-                border: "none",
-                borderRadius: "5px",
-                backgroundColor: "#4CAF50",
-                color: "white",
-                fontWeight: "bold",
-                cursor: "pointer",
-              }}
-            >
+    <div style={styles.overlay}>
+      <div style={styles.dialog}>
+        <h1 style={styles.title}>MiniMilitia Web- by Kaushik Shahare</h1>
+        <div style={styles.form}>
+          <input
+            ref={roomIdRef}
+            type="text"
+            placeholder="Enter Room ID"
+            style={styles.input}
+          />
+          <div style={styles.buttons}>
+            <button onClick={createRoom} style={styles.button}>
               Create Room
             </button>
-            <textarea
-              ref={roomIdRef}
-              placeholder="Enter room ID"
-              style={{
-                width: "100%",
-                padding: "10px",
-                marginBottom: "10px",
-                border: "1px solid #ccc",
-                borderRadius: "5px",
-                resize: "none",
-              }}
-            ></textarea>
-            <button
-              onClick={joinRoom}
-              style={{
-                display: "block",
-                width: "100%",
-                padding: "10px",
-                border: "none",
-                borderRadius: "5px",
-                backgroundColor: "#008CBA",
-                color: "white",
-                fontWeight: "bold",
-                cursor: "pointer",
-              }}
-            >
+            <button onClick={joinRoom} style={styles.button}>
               Join Room
             </button>
-            <button
-              onClick={toggleFullScreen}
-              style={{
-                display: "block",
-                width: "100%",
-                padding: "10px",
-                border: "none",
-                borderRadius: "5px",
-                backgroundColor: "#f44336",
-                color: "white",
-                fontWeight: "bold",
-                cursor: "pointer",
-              }}
-            >
-              Toggle Fullscreen
-            </button>
           </div>
+        </div>
+        <div style={styles.footer}>
+          <button onClick={toggleFullScreen} style={styles.fullScreenButton}>
+            Toggle Fullscreen
+          </button>
+          <button onClick={onClose} style={styles.closeButton}>
+            Close
+          </button>
         </div>
       </div>
     </div>
   );
+};
+
+const styles = {
+  overlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+  },
+  dialog: {
+    background: "#1e1e1e",
+    padding: "20px",
+    borderRadius: "10px",
+    width: "300px",
+    textAlign: "center",
+    boxShadow: "0 0 20px rgba(0, 0, 0, 0.5)",
+    animation: "fadeIn 0.5s",
+  },
+  title: {
+    color: "#fff",
+    marginBottom: "20px",
+  },
+  form: {
+    marginBottom: "20px",
+  },
+  input: {
+    width: "100%",
+    padding: "10px",
+    marginBottom: "10px",
+    borderRadius: "5px",
+    border: "none",
+  },
+  buttons: {
+    display: "flex",
+    justifyContent: "space-between",
+  },
+  button: {
+    flex: 1,
+    margin: "0 5px",
+    padding: "10px",
+    background: "#4CAF50",
+    color: "#fff",
+    border: "none",
+    borderRadius: "5px",
+    cursor: "pointer",
+  },
+  footer: {
+    display: "flex",
+    justifyContent: "space-between",
+  },
+  fullScreenButton: {
+    flex: 1,
+    margin: "0 5px",
+    padding: "10px",
+    background: "#2196F3",
+    color: "#fff",
+    border: "none",
+    borderRadius: "5px",
+    cursor: "pointer",
+  },
+  closeButton: {
+    flex: 1,
+    margin: "0 5px",
+    padding: "10px",
+    background: "#f44336",
+    color: "#fff",
+    border: "none",
+    borderRadius: "5px",
+    cursor: "pointer",
+  },
 };
 
 export default RoomDialog;
