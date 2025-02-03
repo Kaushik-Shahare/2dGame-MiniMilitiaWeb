@@ -16,7 +16,7 @@ const jetpack_force = -0.4; // Upward force from the jetpack
 const jetpack_force_max = -4.5; // Maximum upward force from the jetpack
 const jetpack_fuel_depletion = 0.4; // Fuel depletion rate
 const jetpack_fuel_regen = 0.06; // Fuel regeneration rate
-const jetpack_regen_delay = 2; // Delay before fuel regeneration starts (in ms);
+const jetpack_regen_delay = 8; // Delay before fuel regeneration starts (in ms);
 
 export default class Player {
   constructor(x, y, isMainPlayer = true) {
@@ -130,12 +130,12 @@ export default class Player {
   }
 
   playJetpackSound() {
-    if (this.jetpackSound.paused) {
+    // Play jetpack sound if fuel is available and sound is not already playing
+    if (this.jetpackSound.paused && this.jetpackFuel > 1) {
       this.jetpackSound.play();
     } else {
       // Restart sound if it's already playing
       this.jetpackSound.currentTime = 0;
-      this.jetpackSound.play();
     }
   }
 
@@ -251,7 +251,7 @@ export default class Player {
           this.jetpackFuel = jetpack_fuel_max;
         }
       }
-    }, 100);
+    }, 1000);
   }
 
   render(ctx) {

@@ -413,6 +413,25 @@ const GameCanvas = ({ socket }) => {
   return (
     <div style={{ position: "relative", height: "100vh", overflow: "hidden" }}>
       <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />
+      {!isRoomDialogOpen && (
+        <button
+          onClick={() => setIsRoomDialogOpen(true)}
+          style={{
+            position: "absolute",
+            top: "10px",
+            left: "10px",
+            padding: "10px",
+            background: "#4CAF50",
+            color: "#fff",
+            border: "none",
+            borderRadius: "5px",
+            cursor: "pointer",
+            zIndex: 1100,
+          }}
+        >
+          Open Room Dialog
+        </button>
+      )}
       <RoomDialog
         isOpen={isRoomDialogOpen}
         onClose={() => setIsRoomDialogOpen(false)}
