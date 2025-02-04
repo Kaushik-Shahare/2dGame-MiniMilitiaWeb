@@ -20,6 +20,9 @@ const GameCanvas = ({ socket }) => {
   const [timer, setTimer] = useState(300); // 5 minutes timer
   const [isRespawning, setIsRespawning] = useState(false);
   const [isOpponentDead, setIsOpponentDead] = useState(false);
+  const [respawnCountdown, setRespawnCountdown] = useState(0);
+  const [isRoundOver, setIsRoundOver] = useState(false);
+  const [ranking, setRanking] = useState([]);
   const cursorPosition = useRef({ x: fixedWidth / 2, y: fixedHeight / 2 });
 
   useEffect(() => {
@@ -249,6 +252,7 @@ const GameCanvas = ({ socket }) => {
             }
             player.current.isDead = true;
             setIsRespawning(true);
+            setRespawnCountdown(5);
             // Removed duplicate setTimeout respawn here; will wait for PLAYER_RESPAWN event.
           } else if (
             opponentPlayer.current &&
@@ -268,6 +272,7 @@ const GameCanvas = ({ socket }) => {
           if (data.playerId === player.current.id) {
             player.current.respawn();
             setIsRespawning(false);
+            setRespawnCountdown(0);
           } else if (
             opponentPlayer.current &&
             data.playerId === opponentPlayer.current.id
@@ -297,6 +302,22 @@ const GameCanvas = ({ socket }) => {
           }
           break;
 
+        case "ROUND_OVER":
+          setIsRoundOver(true);
+          // Compute ranking using server scores
+          let ranks = [];
+          if (opponentPlayer.current) {
+            ranks = [
+              { id: "You", score: localScore },
+              { id: "Opponent", score: opponentScore },
+            ];
+          } else {
+            ranks = [{ id: "You", score: localScore }];
+          }
+          ranks.sort((a, b) => b.score - a.score);
+          setRanking(ranks);
+          break;
+
         default:
           break;
       }
@@ -311,7 +332,7 @@ const GameCanvas = ({ socket }) => {
         socket.removeEventListener("message", handleSocketMessage);
       }
     };
-  }, [socket]);
+  }, [socket, localScore, opponentScore]);
 
   useEffect(() => {
     const handleMouseMove = (event) => {
@@ -339,6 +360,16 @@ const GameCanvas = ({ socket }) => {
       document.removeEventListener("mousemove", handleMouseMove);
     };
   }, [isFullScreen]);
+
+  useEffect(() => {
+    // Countdown effect when respawning is active
+    if (isRespawning && respawnCountdown > 0) {
+      const countdownInterval = setInterval(() => {
+        setRespawnCountdown((prev) => prev - 1);
+      }, 1000);
+      return () => clearInterval(countdownInterval);
+    }
+  }, [isRespawning, respawnCountdown]);
 
   // Remove or comment out the local timer decrement effect:
   // useEffect(() => {
@@ -431,6 +462,57 @@ const GameCanvas = ({ socket }) => {
         >
           Open Room Dialog
         </button>
+      )}
+      {isRespawning && (
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            padding: "20px",
+            background: "rgba(0, 0, 0, 0.8)",
+            color: "#fff",
+            fontSize: "24px",
+            borderRadius: "10px",
+            textAlign: "center",
+            zIndex: 1200,
+          }}
+        >
+          <p>You Died. Respawning in {respawnCountdown}s</p>
+        </div>
+      )}
+      {isRoundOver && (
+        <div
+          style={{
+            position: "absolute",
+            top: "0",
+            left: "0",
+            width: "100%",
+            height: "100%",
+            background: "rgba(0, 0, 0, 0.85)",
+            color: "#fff",
+            zIndex: 1300,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            textAlign: "center",
+          }}
+        >
+          <h1>
+            {ranking.length && ranking[0].id === "You" ? "You win" : "You lose"}
+          </h1>
+          <h2>Ranking</h2>
+          <ul style={{ listStyleType: "none", padding: 0 }}>
+            {ranking.map((item, index) => (
+              <li key={index} style={{ margin: "5px 0", fontSize: "18px" }}>
+                {index + 1}. {item.id}: {item.score}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       <RoomDialog
         isOpen={isRoomDialogOpen}
