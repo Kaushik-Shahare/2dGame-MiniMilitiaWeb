@@ -130,8 +130,8 @@ wss.on("connection", (ws) => {
               type: "PLAYER_HIT",
               health: rooms.get(roomId).health,
             });
-            // When health falls to 0 and the player is not already dead, handle death and score update
-            if (data.health <= 0 && !rooms.get(roomId).dead[data.clientId]) {
+            // When health falls to 0, handle death and respawn logic
+            if (data.health <= 0) {
               rooms.get(roomId).scores[data.attackerId] =
                 (rooms.get(roomId).scores[data.attackerId] || 0) + 10;
               rooms.get(roomId).dead[data.clientId] = true;
@@ -140,6 +140,7 @@ wss.on("connection", (ws) => {
                 playerId: data.clientId,
                 attackerId: data.attackerId,
               });
+              // New: Broadcast scores update so that both clients are in-sync
               broadcastToRoom(roomId, {
                 type: "SCORE_UPDATE",
                 scores: rooms.get(roomId).scores,
