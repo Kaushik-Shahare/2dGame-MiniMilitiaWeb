@@ -13,7 +13,7 @@ export default class Bullet {
 
   playSound() {
     this.sound.currentTime = 0; // Reset sound to start
-    this.sound.play();
+    // this.sound.play();
   }
 
   checkCollisionWithPlayer(player) {

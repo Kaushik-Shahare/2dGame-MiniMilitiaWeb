@@ -15,7 +15,7 @@ const jetpack_fuel_max = 100;
 const jetpack_force = -0.4; // Upward force from the jetpack
 const jetpack_force_max = -4.5; // Maximum upward force from the jetpack
 const jetpack_fuel_depletion = 0.4; // Fuel depletion rate
-const jetpack_fuel_regen = 0.06; // Fuel regeneration rate
+const jetpack_fuel_regen = 0.5; // Fuel regeneration rate
 const jetpack_regen_delay = 8; // Delay before fuel regeneration starts (in ms);
 
 export default class Player {
@@ -132,7 +132,7 @@ export default class Player {
   playJetpackSound() {
     // Play jetpack sound if fuel is available and sound is not already playing
     if (this.jetpackSound.paused && this.jetpackFuel > 1) {
-      this.jetpackSound.play();
+      // this.jetpackSound.play();
     } else {
       // Restart sound if it's already playing
       this.jetpackSound.currentTime = 0;
@@ -141,7 +141,7 @@ export default class Player {
 
   stopJetpackSound() {
     if (!this.jetpackSound.paused) {
-      this.jetpackSound.pause();
+      // this.jetpackSound.pause();
       this.jetpackSound.currentTime = 0;
     }
   }
@@ -190,11 +190,14 @@ export default class Player {
       if (!this.onGround) {
         this.onGround = true;
       }
-      clearTimeout(this.jetpackRegenTimeout);
-      this.jetpackRegenTimeout = setTimeout(
-        () => this.regenerateFuel(),
-        jetpack_regen_delay
-      );
+      // NEW: Instead of scheduling regeneration via setTimeout/interval,
+      // immediately regenerate fuel each frame when on the ground.
+      if (!this.isUsingJetpack && this.jetpackFuel < jetpack_fuel_max) {
+        this.jetpackFuel += jetpack_fuel_regen; // per frame increase
+        if (this.jetpackFuel > jetpack_fuel_max) {
+          this.jetpackFuel = jetpack_fuel_max;
+        }
+      }
     } else {
       this.onGround = false;
     }
@@ -239,19 +242,6 @@ export default class Player {
       this.y = canvasHeight - this.height;
 
     this.gun.updateBullets(environment, canvasWidth, canvasHeight);
-  }
-
-  regenerateFuel() {
-    const regenInterval = setInterval(() => {
-      if (this.jetpackFuel >= jetpack_fuel_max || !this.onGround) {
-        clearInterval(regenInterval);
-      } else {
-        this.jetpackFuel += jetpack_fuel_regen;
-        if (this.jetpackFuel > jetpack_fuel_max) {
-          this.jetpackFuel = jetpack_fuel_max;
-        }
-      }
-    }, 1000);
   }
 
   render(ctx) {

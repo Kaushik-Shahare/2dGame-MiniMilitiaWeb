@@ -5,6 +5,7 @@ import Bullet from "./Bullet";
 import RoomDialog from "./RoomDialog";
 
 const GameCanvas = ({ socket }) => {
+  const containerRef = useRef(null); // NEW: container reference for fullscreen
   const canvasRef = useRef(null);
   const roomIdRef = useRef(null);
   const player = useRef(new Player(100, 500)); // Main player instance
@@ -24,6 +25,7 @@ const GameCanvas = ({ socket }) => {
   const [isRoundOver, setIsRoundOver] = useState(false);
   const [ranking, setRanking] = useState([]);
   const cursorPosition = useRef({ x: fixedWidth / 2, y: fixedHeight / 2 });
+  const [notification, setNotification] = useState(null); // New: Notification state
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -124,22 +126,26 @@ const GameCanvas = ({ socket }) => {
         opponentPlayer.current.gun.bullets =
           opponentPlayer.current.gun.bullets.filter((bullet) => {
             if (bullet.checkCollisionWithPlayer(player.current)) {
-              // Bullet hit main player
-              player.current.health -= 20;
-              if (player.current.health < 0) {
-                player.current.health = 0;
-              }
-              if (socket && socket.readyState === WebSocket.OPEN) {
-                const roomId = roomIdRef.current ? roomIdRef.current.value : "";
-                socket.send(
-                  JSON.stringify({
-                    type: "PLAYER_HIT",
-                    roomId, // safe access
-                    clientId: player.current.id,
-                    health: player.current.health,
-                    attackerId: opponentPlayer.current.id,
-                  })
-                );
+              // NEW: Only apply damage if player is not dead
+              if (!player.current.isDead) {
+                player.current.health -= 20;
+                if (player.current.health < 0) {
+                  player.current.health = 0;
+                }
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                  const roomId = roomIdRef.current
+                    ? roomIdRef.current.value
+                    : "";
+                  socket.send(
+                    JSON.stringify({
+                      type: "PLAYER_HIT",
+                      roomId, // safe access
+                      clientId: player.current.id,
+                      health: player.current.health,
+                      attackerId: opponentPlayer.current.id,
+                    })
+                  );
+                }
               }
               return false; // Remove bullet
             }
@@ -318,6 +324,13 @@ const GameCanvas = ({ socket }) => {
           setRanking(ranks);
           break;
 
+        case "PLAYER_LEFT":
+          setNotification(data.message);
+          setTimeout(() => {
+            setNotification(null);
+          }, 3000);
+          break;
+
         default:
           break;
       }
@@ -413,12 +426,13 @@ const GameCanvas = ({ socket }) => {
         })
       );
     }
+    toggleFullScreen();
   };
 
   const toggleFullScreen = () => {
-    const canvas = canvasRef.current;
+    // Change to request fullscreen on the container div instead of canvas
     if (!document.fullscreenElement) {
-      canvas.requestFullscreen().then(() => {
+      containerRef.current.requestFullscreen().then(() => {
         setIsFullScreen(true);
       });
     } else {
@@ -426,6 +440,7 @@ const GameCanvas = ({ socket }) => {
         setIsFullScreen(false);
       });
     }
+    isRoomDialogOpen && setIsRoomDialogOpen(false);
   };
 
   const handlePlayerDeath = (playerId) => {
@@ -442,7 +457,10 @@ const GameCanvas = ({ socket }) => {
   };
 
   return (
-    <div style={{ position: "relative", height: "100vh", overflow: "hidden" }}>
+    <div
+      ref={containerRef}
+      style={{ position: "relative", height: "100vh", overflow: "hidden" }}
+    >
       <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />
       {!isRoomDialogOpen && (
         <button
@@ -466,7 +484,7 @@ const GameCanvas = ({ socket }) => {
       {isRespawning && (
         <div
           style={{
-            position: "absolute",
+            position: "fixed",
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%)",
@@ -485,7 +503,7 @@ const GameCanvas = ({ socket }) => {
       {isRoundOver && (
         <div
           style={{
-            position: "absolute",
+            position: "fixed",
             top: "0",
             left: "0",
             width: "100%",
@@ -512,6 +530,22 @@ const GameCanvas = ({ socket }) => {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+      {notification && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "20px",
+            right: "20px",
+            background: "rgba(0, 0, 0, 0.8)",
+            color: "#fff",
+            padding: "10px 20px",
+            borderRadius: "5px",
+            zIndex: 1500,
+          }}
+        >
+          {notification}
         </div>
       )}
       <RoomDialog
