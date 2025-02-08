@@ -275,14 +275,15 @@ export default class Player {
     ctx.fillStyle = "white";
     // Draw the player id below the sprite
     ctx.fillText(this.id, this.x + this.width / 2, this.y + this.height + 15);
+
     // Draw health bar above the sprite
     const healthBarWidth = this.width;
     const healthBarHeight = 5;
     // Draw background (red)
-    ctx.fillStyle = "red";
+    ctx.fillStyle = "black";
     ctx.fillRect(this.x, this.y - 10, healthBarWidth, healthBarHeight);
     // Draw current health (green)
-    ctx.fillStyle = "green";
+    ctx.fillStyle = "red";
     ctx.fillRect(
       this.x,
       this.y - 10,

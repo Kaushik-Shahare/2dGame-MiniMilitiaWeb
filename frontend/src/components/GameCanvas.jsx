@@ -34,6 +34,14 @@ const GameCanvas = ({ socket }) => {
     canvas.width = fixedWidth;
     canvas.height = fixedHeight;
 
+    // Preload SVG images as data URLs
+    const healthIcon = new Image();
+    healthIcon.src =
+      'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M47.6 300.4L228.3 469.1c7.5 7 17.4 10.9 27.7 10.9s20.2-3.9 27.7-10.9L464.4 300.4c30.4-28.3 47.6-68 47.6-109.5v-5.8c0-69.9-50.5-129.5-119.4-141C347 36.5 300.6 51.4 268 84L256 96 244 84c-32.6-32.6-79-47.5-124.6-39.9C50.5 55.6 0 115.2 0 185.1v5.8c0 41.5 17.2 81.2 47.6 109.5z" fill="white"/></svg>';
+    const jetpackIcon = new Image();
+    jetpackIcon.src =
+      'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><path d="M153.6 29.9l16-21.3C173.6 3.2 180 0 186.7 0C198.4 0 208 9.6 208 21.3V43.5c0 13.1 5.4 25.7 14.9 34.7L307.6 159C356.4 205.6 384 270.2 384 337.7C384 434 306 512 209.7 512H192C86 512 0 426 0 320v-3.8c0-48.8 19.4-95.6 53.9-130.1l3.5-3.5c4.2-4.2 10-6.6 16-6.6C85.9 176 96 186.1 96 198.6V288c0 35.3 28.7 64 64 64s64-28.7 64-64v-3.9c0-18-7.2-35.3-19.9-48l-38.6-38.6c-24-24-37.5-56.7-37.5-90.7c0-27.7 9-54.8 25.6-76.9z" fill="white"/></svg>';
+
     const update = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -60,38 +68,153 @@ const GameCanvas = ({ socket }) => {
         );
       }
 
-      // Render current player's health bar at the top right side
-      ctx.fillStyle = "red";
-      ctx.fillRect(fixedWidth - 210, 10, 200, 20);
-      ctx.fillStyle = "green";
+      // ****************************************************************************************************
+      // Render current player's health bar with a lighter purple (lavender) color
+      const healthBarX = fixedWidth - 230;
+      const healthBarY = 30;
+      const healthBarWidth = 200;
+      const healthBarHeight = 20;
+      ctx.fillStyle = "#A020F0";
       ctx.fillRect(
-        fixedWidth - 210,
-        10,
-        (player.current.health / 100) * 200,
-        20
+        healthBarX,
+        healthBarY,
+        (player.current.health / 100) * healthBarWidth,
+        healthBarHeight
       );
+      // Add white border around the health bar container
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
 
       // Render current player's jetpack fuel bar below the health bar
+      const jetpackFuelX = fixedWidth - 230;
+      const jetpackFuelY = 60;
+      const jetpackFuelWidth = 200;
+      const jetpackFuelHeight = 20;
       ctx.fillStyle = "blue";
       ctx.fillRect(
-        fixedWidth - 210,
-        40,
-        (player.current.jetpackFuel / 100) * 200,
-        20
+        jetpackFuelX,
+        jetpackFuelY,
+        (player.current.jetpackFuel / 100) * jetpackFuelWidth,
+        jetpackFuelHeight
+      );
+      // Add white border around the fuel bar container
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(
+        jetpackFuelX,
+        jetpackFuelY,
+        jetpackFuelWidth,
+        jetpackFuelHeight
       );
 
-      // Render game score
+      // Draw icons for health and jetpack fuel
+      const iconWidth = 20,
+        iconHeight = 20;
+      ctx.drawImage(
+        healthIcon,
+        healthBarX - iconWidth - 10,
+        healthBarY,
+        iconWidth,
+        iconHeight
+      );
+      ctx.drawImage(
+        jetpackIcon,
+        jetpackFuelX - iconWidth - 10,
+        jetpackFuelY,
+        iconWidth,
+        iconHeight
+      );
+
+      // Border around the health and jetpack fuel bars
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(
+        healthBarX - iconWidth - 15,
+        healthBarY - 10,
+        healthBarWidth + iconWidth + 20,
+        healthBarHeight + jetpackFuelHeight + 30
+      );
+
+      // *******************************************************************************************
+      // Updated: Draw score UI with rounded boxes
+      function drawRoundedRect(ctx, x, y, width, height, radius, fillColor) {
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+        ctx.lineTo(x + width, y + height - radius);
+        ctx.quadraticCurveTo(
+          x + width,
+          y + height,
+          x + width - radius,
+          y + height
+        );
+        ctx.lineTo(x + radius, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+        ctx.fillStyle = fillColor;
+        ctx.fill();
+      }
+      const boxWidth = 100,
+        boxHeight = 40;
+      // Local player score box on left
+      const localBoxX = fixedWidth / 2 - 160,
+        localBoxY = 10;
+      drawRoundedRect(
+        ctx,
+        localBoxX,
+        localBoxY,
+        boxWidth,
+        boxHeight,
+        10,
+        "blue"
+      );
+      // Opponent score box on right
+      const oppBoxX = fixedWidth / 2 + 80,
+        oppBoxY = 10;
+      drawRoundedRect(ctx, oppBoxX, oppBoxY, boxWidth, boxHeight, 10, "red");
       ctx.fillStyle = "white";
-      ctx.font = "20px Arial";
-      ctx.fillText(`${localScore} | ${opponentScore}`, 550, 30);
+      ctx.font = "bold 20px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(
+        localScore,
+        localBoxX + boxWidth / 2,
+        localBoxY + boxHeight / 2
+      );
+      ctx.fillText(
+        opponentScore,
+        oppBoxX + boxWidth / 2,
+        oppBoxY + boxHeight / 2
+      );
 
       // Render game timer
       const minutes = Math.floor(timer / 60);
       const seconds = timer % 60;
+      const timerBoxX = fixedWidth / 2 - boxWidth / 2;
+      const timerBoxY = 10;
+      const timerBoxWidth = 120;
+      const timerBoxHeight = 50;
+      drawRoundedRect(
+        ctx,
+        timerBoxX,
+        timerBoxY,
+        timerBoxWidth,
+        timerBoxHeight,
+        10,
+        "black"
+      );
+      ctx.fillStyle = "white";
+      ctx.font = "bold 20px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
       ctx.fillText(
-        `Time: ${minutes}:${seconds < 10 ? "0" : ""}${seconds}`,
-        550,
-        60
+        `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`,
+        timerBoxX + timerBoxWidth / 2,
+        timerBoxY + timerBoxHeight / 2
       );
 
       // Check collisions for bullets fired by the main player
@@ -392,6 +515,20 @@ const GameCanvas = ({ socket }) => {
   //   return () => clearInterval(intervalId);
   // }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (
+        player.current &&
+        player.current.gun &&
+        typeof player.current.gun.handleKeyDown === "function"
+      ) {
+        player.current.gun.handleKeyDown(event);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const handleMouseDown = () => {
     if (player.current && roomIdRef.current) {
       player.current.gun.handleMouseDown(socket, roomIdRef.current.value);
@@ -470,15 +607,25 @@ const GameCanvas = ({ socket }) => {
             top: "10px",
             left: "10px",
             padding: "10px",
-            background: "#4CAF50",
-            color: "#fff",
-            border: "none",
+            background: "transparent",
+            border: "2px solid white",
             borderRadius: "5px",
             cursor: "pointer",
             zIndex: 1100,
           }}
         >
-          Open Room Dialog
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 320 512"
+            fill="white"
+            width="40"
+            height="40"
+          >
+            <path
+              d="M48 64C21.5 64 0 85.5 0 112L0 400c0 26.5 21.5 48 48 48l32 0c26.5 0 48-21.5 48-48l0-288c0-26.5-21.5-48-48-48L48 64zm192 
+            0c-26.5 0-48 21.5-48 48l0 288c0 26.5 21.5 48 48 48l32 0c26.5 0 48-21.5 48-48l0-288c0-26.5-21.5-48-48-48l-32 0z"
+            />
+          </svg>
         </button>
       )}
       {isRespawning && (

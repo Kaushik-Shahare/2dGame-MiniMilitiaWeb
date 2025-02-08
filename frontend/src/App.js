@@ -5,10 +5,7 @@ const App = () => {
   const [socket, setSocket] = useState(null);
 
   useEffect(() => {
-    // const ws = new WebSocket("ws://localhost:3001");
-    const ws = new WebSocket(
-      "wss://forward-letting-resulted-tile.trycloudflare.com"
-    );
+    const ws = new WebSocket("ws://localhost:3001");
     setSocket(ws);
 
     return () => ws.close();
