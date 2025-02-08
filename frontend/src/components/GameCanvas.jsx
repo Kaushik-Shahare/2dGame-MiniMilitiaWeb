@@ -45,20 +45,41 @@ const GameCanvas = ({ socket }) => {
     const update = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Scale the canvas
+      // Save context and apply scaling
       const scaleX = canvas.width / fixedWidth;
       const scaleY = canvas.height / fixedHeight;
-      ctx.save();
+      ctx.save(); // Save scaled state
       ctx.scale(scaleX, scaleY);
+      ctx.save(); // Save before camera transform
 
-      // Render environment and main player
+      // Camera follow transformation (applies zoom and translation)
+      {
+        const zoom = 1.2;
+        const viewportW = fixedWidth / zoom;
+        const viewportH = fixedHeight / zoom;
+        const playerCenterX = player.current.x + player.current.width / 2;
+        const playerCenterY = player.current.y + player.current.height / 2;
+        const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
+        const cameraX = clamp(
+          playerCenterX - viewportW / 2,
+          0,
+          fixedWidth - viewportW
+        );
+        const cameraY = clamp(
+          playerCenterY - viewportH / 2,
+          0,
+          fixedHeight - viewportH
+        );
+        ctx.scale(zoom, zoom);
+        ctx.translate(-cameraX, -cameraY);
+      }
+
+      // Render game world (environment and players)
       environment.render(ctx, scaleX, scaleY);
       if (!isRespawning) {
         player.current.update(environment);
         player.current.render(ctx);
       }
-
-      // Render the opponent player
       if (opponentPlayer.current && !isOpponentDead) {
         opponentPlayer.current.render(ctx);
         opponentPlayer.current.gun.updateBullets(
@@ -68,223 +89,253 @@ const GameCanvas = ({ socket }) => {
         );
       }
 
-      // ****************************************************************************************************
-      // Render current player's health bar with a lighter purple (lavender) color
-      const healthBarX = fixedWidth - 230;
-      const healthBarY = 30;
-      const healthBarWidth = 200;
-      const healthBarHeight = 20;
-      ctx.fillStyle = "#A020F0";
-      ctx.fillRect(
-        healthBarX,
-        healthBarY,
-        (player.current.health / 100) * healthBarWidth,
-        healthBarHeight
-      );
-      // Add white border around the health bar container
-      ctx.strokeStyle = "white";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
-
-      // Render current player's jetpack fuel bar below the health bar
-      const jetpackFuelX = fixedWidth - 230;
-      const jetpackFuelY = 60;
-      const jetpackFuelWidth = 200;
-      const jetpackFuelHeight = 20;
-      ctx.fillStyle = "blue";
-      ctx.fillRect(
-        jetpackFuelX,
-        jetpackFuelY,
-        (player.current.jetpackFuel / 100) * jetpackFuelWidth,
-        jetpackFuelHeight
-      );
-      // Add white border around the fuel bar container
-      ctx.strokeStyle = "white";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(
-        jetpackFuelX,
-        jetpackFuelY,
-        jetpackFuelWidth,
-        jetpackFuelHeight
-      );
-
-      // Draw icons for health and jetpack fuel
-      const iconWidth = 20,
-        iconHeight = 20;
-      ctx.drawImage(
-        healthIcon,
-        healthBarX - iconWidth - 10,
-        healthBarY,
-        iconWidth,
-        iconHeight
-      );
-      ctx.drawImage(
-        jetpackIcon,
-        jetpackFuelX - iconWidth - 10,
-        jetpackFuelY,
-        iconWidth,
-        iconHeight
-      );
-
-      // Border around the health and jetpack fuel bars
-      ctx.strokeStyle = "white";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(
-        healthBarX - iconWidth - 15,
-        healthBarY - 10,
-        healthBarWidth + iconWidth + 20,
-        healthBarHeight + jetpackFuelHeight + 30
-      );
-
-      // *******************************************************************************************
-      // Updated: Draw score UI with rounded boxes
-      function drawRoundedRect(ctx, x, y, width, height, radius, fillColor) {
-        ctx.beginPath();
-        ctx.moveTo(x + radius, y);
-        ctx.lineTo(x + width - radius, y);
-        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-        ctx.lineTo(x + width, y + height - radius);
-        ctx.quadraticCurveTo(
-          x + width,
-          y + height,
-          x + width - radius,
-          y + height
-        );
-        ctx.lineTo(x + radius, y + height);
-        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-        ctx.lineTo(x, y + radius);
-        ctx.quadraticCurveTo(x, y, x + radius, y);
-        ctx.closePath();
-        ctx.fillStyle = fillColor;
-        ctx.fill();
-      }
-      const boxWidth = 100,
-        boxHeight = 40;
-      // Local player score box on left
-      const localBoxX = fixedWidth / 2 - 160,
-        localBoxY = 10;
-      drawRoundedRect(
-        ctx,
-        localBoxX,
-        localBoxY,
-        boxWidth,
-        boxHeight,
-        10,
-        "blue"
-      );
-      // Opponent score box on right
-      const oppBoxX = fixedWidth / 2 + 80,
-        oppBoxY = 10;
-      drawRoundedRect(ctx, oppBoxX, oppBoxY, boxWidth, boxHeight, 10, "red");
-      ctx.fillStyle = "white";
-      ctx.font = "bold 20px Arial";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(
-        localScore,
-        localBoxX + boxWidth / 2,
-        localBoxY + boxHeight / 2
-      );
-      ctx.fillText(
-        opponentScore,
-        oppBoxX + boxWidth / 2,
-        oppBoxY + boxHeight / 2
-      );
-
-      // Render game timer
-      const minutes = Math.floor(timer / 60);
-      const seconds = timer % 60;
-      const timerBoxX = fixedWidth / 2 - boxWidth / 2;
-      const timerBoxY = 10;
-      const timerBoxWidth = 120;
-      const timerBoxHeight = 50;
-      drawRoundedRect(
-        ctx,
-        timerBoxX,
-        timerBoxY,
-        timerBoxWidth,
-        timerBoxHeight,
-        10,
-        "black"
-      );
-      ctx.fillStyle = "white";
-      ctx.font = "bold 20px Arial";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(
-        `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`,
-        timerBoxX + timerBoxWidth / 2,
-        timerBoxY + timerBoxHeight / 2
-      );
-
-      // Check collisions for bullets fired by the main player
-      player.current.gun.bullets = player.current.gun.bullets.filter(
-        (bullet) => {
-          if (
-            opponentPlayer.current &&
-            bullet.checkCollisionWithPlayer(opponentPlayer.current)
-          ) {
-            // Calculate new health without directly mutating local object
-            const newHealth = Math.max(opponentPlayer.current.health - 20, 0);
-            if (socket && socket.readyState === WebSocket.OPEN) {
-              const roomId = roomIdRef.current ? roomIdRef.current.value : "";
+      // Bullet collision detection
+      // Optimized bullet collision detection using filter
+      if (opponentPlayer.current && opponentPlayer.current.health > 0) {
+        const shooterId = player.current.id;
+        const target = opponentPlayer.current;
+        player.current.gun.bullets = player.current.gun.bullets.filter(
+          (bullet) => {
+            if (bullet.checkCollisionWithPlayer(target)) {
               socket.send(
                 JSON.stringify({
                   type: "PLAYER_HIT",
-                  roomId, // safe access
-                  clientId: opponentPlayer.current.id,
-                  health: newHealth,
-                  attackerId: player.current.id,
+                  clientId: target.id, // player hit
+                  attackerId: shooterId, // shooter
+                  health: target.health - bullet.damage,
                 })
               );
+              return false; // remove bullet
             }
-            return false; // Remove bullet
+            return true;
           }
-          return bullet.update(environment, canvas.width, canvas.height);
-        }
-      );
+        );
+      }
 
-      // Check collisions for bullets fired by the opponent player
-      if (opponentPlayer.current) {
+      if (
+        player.current &&
+        player.current.health > 0 &&
+        opponentPlayer.current
+      ) {
+        const shooterId = opponentPlayer.current.id;
+        const target = player.current;
         opponentPlayer.current.gun.bullets =
           opponentPlayer.current.gun.bullets.filter((bullet) => {
-            if (bullet.checkCollisionWithPlayer(player.current)) {
-              // NEW: Only apply damage if player is not dead
-              if (!player.current.isDead) {
-                player.current.health -= 20;
-                if (player.current.health < 0) {
-                  player.current.health = 0;
-                }
-                if (socket && socket.readyState === WebSocket.OPEN) {
-                  const roomId = roomIdRef.current
-                    ? roomIdRef.current.value
-                    : "";
-                  socket.send(
-                    JSON.stringify({
-                      type: "PLAYER_HIT",
-                      roomId, // safe access
-                      clientId: player.current.id,
-                      health: player.current.health,
-                      attackerId: opponentPlayer.current.id,
-                    })
-                  );
-                }
-              }
-              return false; // Remove bullet
+            if (bullet.checkCollisionWithPlayer(target)) {
+              socket.send(
+                JSON.stringify({
+                  type: "PLAYER_HIT",
+                  clientId: target.id, // player hit
+                  attackerId: shooterId, // shooter
+                  health: target.health - bullet.damage,
+                })
+              );
+              return false; // remove bullet
             }
-            return bullet.update(environment, canvas.width, canvas.height);
+            return true;
           });
       }
 
+      // Restore to state before camera transformation and scaling
+      ctx.restore();
       ctx.restore();
 
-      // Send player position to the server
+      // Now render UI in fixed view coordinates (unaffected by camera zoom)
+      {
+        // Health bar and jetpack fuel
+        const healthBarX = fixedWidth - 230,
+          healthBarY = 30;
+        const healthBarWidth = 200,
+          healthBarHeight = 20;
+        ctx.fillStyle = "#A020F0";
+        ctx.fillRect(
+          healthBarX,
+          healthBarY,
+          (player.current.health / 100) * healthBarWidth,
+          healthBarHeight
+        );
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+        const jetpackFuelX = fixedWidth - 230,
+          jetpackFuelY = 60;
+        const jetpackFuelWidth = 200,
+          jetpackFuelHeight = 20;
+        ctx.fillStyle = "blue";
+        ctx.fillRect(
+          jetpackFuelX,
+          jetpackFuelY,
+          (player.current.jetpackFuel / 100) * jetpackFuelWidth,
+          jetpackFuelHeight
+        );
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+          jetpackFuelX,
+          jetpackFuelY,
+          jetpackFuelWidth,
+          jetpackFuelHeight
+        );
+
+        // Draw icons for health and fuel
+        const iconWidth = 20,
+          iconHeight = 20;
+        ctx.drawImage(
+          healthIcon,
+          healthBarX - iconWidth - 10,
+          healthBarY,
+          iconWidth,
+          iconHeight
+        );
+        ctx.drawImage(
+          jetpackIcon,
+          jetpackFuelX - iconWidth - 10,
+          jetpackFuelY,
+          iconWidth,
+          iconHeight
+        );
+
+        // Border around UI bars
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+          healthBarX - iconWidth - 15,
+          healthBarY - 10,
+          healthBarWidth + iconWidth + 20,
+          healthBarHeight + jetpackFuelHeight + 30
+        );
+
+        // Score and timer UI using rounded boxes
+        function drawRoundedRect(ctx, x, y, width, height, radius, fillColor) {
+          ctx.beginPath();
+          ctx.moveTo(x + radius, y);
+          ctx.lineTo(x + width - radius, y);
+          ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+          ctx.lineTo(x + width, y + height - radius);
+          ctx.quadraticCurveTo(
+            x + width,
+            y + height,
+            x + width - radius,
+            y + height
+          );
+          ctx.lineTo(x + radius, y + height);
+          ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+          ctx.lineTo(x, y + radius);
+          ctx.quadraticCurveTo(x, y, x + radius, y);
+          ctx.closePath();
+          ctx.fillStyle = fillColor;
+          ctx.fill();
+        }
+        const boxWidth = 100,
+          boxHeight = 40;
+        const localBoxX = fixedWidth / 2 - 160,
+          localBoxY = 10;
+        drawRoundedRect(
+          ctx,
+          localBoxX,
+          localBoxY,
+          boxWidth,
+          boxHeight,
+          10,
+          "blue"
+        );
+        const oppBoxX = fixedWidth / 2 + 80,
+          oppBoxY = 10;
+        drawRoundedRect(ctx, oppBoxX, oppBoxY, boxWidth, boxHeight, 10, "red");
+        ctx.fillStyle = "white";
+        ctx.font = "bold 20px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(
+          localScore,
+          localBoxX + boxWidth / 2,
+          localBoxY + boxHeight / 2
+        );
+        ctx.fillText(
+          opponentScore,
+          oppBoxX + boxWidth / 2,
+          oppBoxY + boxHeight / 2
+        );
+
+        const minutes = Math.floor(timer / 60);
+        const seconds = timer % 60;
+        const timerBoxX = fixedWidth / 2 - boxWidth / 2;
+        const timerBoxY = 10,
+          timerBoxWidth = 120,
+          timerBoxHeight = 50;
+        drawRoundedRect(
+          ctx,
+          timerBoxX,
+          timerBoxY,
+          timerBoxWidth,
+          timerBoxHeight,
+          10,
+          "black"
+        );
+        ctx.fillStyle = "white";
+        ctx.font = "bold 20px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(
+          `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`,
+          timerBoxX + timerBoxWidth / 2,
+          timerBoxY + timerBoxHeight / 2
+        );
+
+        // New: Render Gun Stat UI (ammo count and reload indicator) at fixed coordinates
+        // ************************************************************8
+        const gun = player.current.gun;
+        // Render the gun stats UI
+        const gunStatsX = 100;
+        const gunStatsY = 20;
+        const gunStatsWidth = 200;
+        const gunStatsHeight = 40;
+        // Border around the gun stats UI
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+          gunStatsX - 10,
+          gunStatsY - 10,
+          gunStatsWidth + 20,
+          gunStatsHeight + 20
+        );
+        // Draw equipped gun Image from player's gun
+        ctx.drawImage(
+          gun.gunSkin,
+          gunStatsX + 20,
+          gunStatsY,
+          gunStatsWidth - 40,
+          gunStatsHeight
+        );
+        // Draw ammo count
+        ctx.font = "20px Arial";
+        ctx.fillStyle = "white";
+        ctx.textAlign = "center";
+        ctx.fillText(
+          `${gun.ammo} / ${gun.maxAmmo}`,
+          gunStatsX + 160,
+          gunStatsY + 35
+        );
+        // NEW: Draw infinity symbol over gun stats if reloading
+        if (gun.isReloading && gun.reloadSVG.complete) {
+          const iconSize = 30;
+          ctx.drawImage(
+            gun.reloadSVG,
+            gunStatsX + (gunStatsWidth - iconSize) / 2,
+            gunStatsY + (gunStatsHeight - iconSize) / 2,
+            iconSize,
+            iconSize
+          );
+        }
+      }
+
+      // Send player position to server and request next frame
       if (socket && socket.readyState === WebSocket.OPEN) {
         const roomId = roomIdRef.current ? roomIdRef.current.value : "";
         socket.send(
           JSON.stringify({
             type: "MOVE",
-            roomId, // safe access
+            roomId,
             position: {
               x: player.current.x,
               y: player.current.y,
@@ -294,9 +345,9 @@ const GameCanvas = ({ socket }) => {
           })
         );
       }
-
       animationFrameId.current = requestAnimationFrame(update);
     };
+
     canvas.addEventListener("mousedown", handleMouseDown);
 
     update();

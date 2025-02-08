@@ -2,7 +2,7 @@ import Bullet from "./Bullet";
 
 const gunLength = 30;
 const gunWidth = 5;
-const maxAmmo = 3;
+const maxAmmo = 25;
 
 export default class Gun {
   constructor(player) {
@@ -203,53 +203,5 @@ export default class Gun {
 
     // Render bullets
     this.bullets.forEach((bullet) => bullet.render(ctx));
-
-    // ************************************************************8
-    // Render the gun stats UI
-    const gunStatsX = 100;
-    const gunStatsY = 20;
-    const gunStatsWidth = 200;
-    const gunStatsHeight = 40;
-
-    // Border around the health and jetpack fuel bars
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(
-      gunStatsX - 10,
-      gunStatsY - 10,
-      gunStatsWidth + 20,
-      gunStatsHeight + 20
-    );
-
-    // Draw equipped gun Image
-    ctx.drawImage(
-      this.gunSkin,
-      gunStatsX + 20,
-      gunStatsY,
-      gunStatsWidth - 40,
-      gunStatsHeight
-    );
-
-    // Draw ammo count
-    ctx.font = "20px Arial";
-    ctx.fillStyle = "white";
-    ctx.textAlign = "center";
-    ctx.fillText(
-      `${this.ammo} / ${this.maxAmmo}`,
-      gunStatsX + 160,
-      gunStatsY + 35
-    );
-
-    // NEW: Draw infinity symbol over gun stats if reloading
-    if (this.isReloading) {
-      const iconSize = 30;
-      ctx.drawImage(
-        this.reloadSVG,
-        gunStatsX + (gunStatsWidth - iconSize) / 2,
-        gunStatsY + (gunStatsHeight - iconSize) / 2,
-        iconSize,
-        iconSize
-      );
-    }
   }
 }

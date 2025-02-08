@@ -1,5 +1,6 @@
 export default class Bullet {
   constructor(startX, startY, angle) {
+    this.damage = 10;
     this.x = startX;
     this.y = startY;
     this.speed = 10; // Bullet speed
