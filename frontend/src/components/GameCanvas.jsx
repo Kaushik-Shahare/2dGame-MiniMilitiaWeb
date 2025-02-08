@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Environment from "./Environment";
 import Player from "./Player";
 import Bullet from "./Bullet";
+import Gun from "./Gun";
 import RoomDialog from "./RoomDialog";
 
 const GameCanvas = ({ socket }) => {
@@ -80,13 +81,14 @@ const GameCanvas = ({ socket }) => {
         player.current.update(environment);
         player.current.render(ctx);
       }
+      // Update opponent's bullets with environment and canvas dimensions
       if (opponentPlayer.current && !isOpponentDead) {
         opponentPlayer.current.render(ctx);
-        opponentPlayer.current.gun.updateBullets(
-          environment,
-          fixedWidth,
-          fixedHeight
-        );
+        opponentPlayer.current.gun.bullets.forEach((bullet) => {
+          if (bullet.update(environment, canvas.width, canvas.height)) {
+            bullet.render(ctx);
+          }
+        });
       }
 
       // Bullet collision detection
@@ -134,6 +136,15 @@ const GameCanvas = ({ socket }) => {
             }
             return true;
           });
+      }
+
+      // Add: Render local player's bullets
+      if (!isRespawning) {
+        player.current.gun.bullets.forEach((bullet) => {
+          if (bullet.update(environment, canvas.width, canvas.height)) {
+            bullet.render(ctx);
+          }
+        });
       }
 
       // Restore to state before camera transformation and scaling
@@ -377,6 +388,7 @@ const GameCanvas = ({ socket }) => {
           if (!opponentPlayer.current) {
             opponentPlayer.current = new Player(position.x, position.y, false);
             opponentPlayer.current.id = clientId; // assign opponent id
+            opponentPlayer.current.gun = new Gun(opponentPlayer.current); // initialize opponent's gun
           } else {
             if (!opponentPlayer.current.id) {
               opponentPlayer.current.id = clientId; // ensure id is set
@@ -392,14 +404,15 @@ const GameCanvas = ({ socket }) => {
 
         case "SHOOT":
           const { position: shootPosition } = data;
-
-          // Create a new bullet for the opponent
+          // Ensure shootPosition includes a valid angle. Fallback if undefined.
+          const angle =
+            shootPosition.angle !== undefined
+              ? shootPosition.angle
+              : opponentPlayer.current && opponentPlayer.current.gun
+              ? opponentPlayer.current.gun.gunAngle
+              : 0;
           if (opponentPlayer.current) {
-            const bullet = new Bullet(
-              shootPosition.x,
-              shootPosition.y,
-              shootPosition.angle
-            );
+            const bullet = new Bullet(shootPosition.x, shootPosition.y, angle);
             opponentPlayer.current.gun.bullets.push(bullet);
           }
           break;

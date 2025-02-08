@@ -3,9 +3,11 @@ export default class Bullet {
     this.damage = 10;
     this.x = startX;
     this.y = startY;
-    this.speed = 10; // Bullet speed
+    this.speed = 8; // Bullet speed
     this.velocityX = Math.cos(angle) * this.speed;
     this.velocityY = Math.sin(angle) * this.speed;
+    // Initialize trail array for smooth motion effect
+    this.trail = [];
 
     // Load bullet sound
     this.sound = new Audio("/sounds/submachineGun.mp3");
@@ -26,21 +28,34 @@ export default class Bullet {
     );
   }
 
-  update(environment, canvasWidth, canvasHeight) {
-    this.x += this.velocityX;
-    this.y += this.velocityY;
+  update(environment, canvasWidth, canvasHeight, dt = 1) {
+    // Add current position to trail
+    this.trail.push({ x: this.x, y: this.y });
+    if (this.trail.length > 10) {
+      this.trail.shift();
+    }
 
-    // Bullet-environment interaction
-    if (environment.checkGunCollision(this.x, this.y)) {
+    // Use dt multiplier for smooth movement
+    this.x += this.velocityX * dt;
+    this.y += this.velocityY * dt;
+
+    // Check collision with environment if defined
+    if (
+      environment &&
+      typeof environment.checkGunCollision === "function" &&
+      environment.checkGunCollision(this.x, this.y)
+    ) {
       return false; // Remove bullet
     }
 
-    // Bounds check
+    // Check canvas bounds only if dimensions are provided
     if (
-      this.x < 0 ||
-      this.x > canvasWidth ||
-      this.y < 0 ||
-      this.y > canvasHeight
+      typeof canvasWidth === "number" &&
+      typeof canvasHeight === "number" &&
+      (this.x < 0 ||
+        this.x > canvasWidth ||
+        this.y < 0 ||
+        this.y > canvasHeight)
     ) {
       return false;
     }
@@ -48,6 +63,16 @@ export default class Bullet {
   }
 
   render(ctx) {
+    // Render trail for smooth animation effect
+    for (let i = 0; i < this.trail.length; i++) {
+      const point = this.trail[i];
+      const opacity = (i + 1) / this.trail.length;
+      ctx.fillStyle = `rgba(0, 0, 0, ${opacity * 0.5})`;
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Draw bullet on top
     ctx.fillStyle = "black";
     ctx.beginPath();
     ctx.arc(this.x, this.y, 5, 0, Math.PI * 2);
