@@ -631,6 +631,11 @@ const GameCanvas = ({ socket }) => {
   };
 
   const createRoom = () => {
+    if (!(socket && socket.readyState === WebSocket.OPEN)) {
+      setNotification("Server is starting, please wait few seconds...");
+      setTimeout(() => setNotification(null), 3000);
+      return;
+    }
     socket.send(
       JSON.stringify({
         type: "CREATE_ROOM",
@@ -647,6 +652,11 @@ const GameCanvas = ({ socket }) => {
   };
 
   const joinRoom = () => {
+    if (!(socket && socket.readyState === WebSocket.OPEN)) {
+      setNotification("Server is starting, please wait few seconds...");
+      setTimeout(() => setNotification(null), 3000);
+      return;
+    }
     if (!roomIdRef.current) return;
     const roomId = roomIdRef.current.value; // Get the value from the textarea
     if (roomId) {
