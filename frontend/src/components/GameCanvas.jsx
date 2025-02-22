@@ -81,14 +81,31 @@ const GameCanvas = ({ socket }) => {
         player.current.update(environment);
         player.current.render(ctx);
       }
-      // Update opponent's bullets with environment and canvas dimensions
-      if (opponentPlayer.current && !isOpponentDead) {
-        opponentPlayer.current.render(ctx);
-        opponentPlayer.current.gun.bullets.forEach((bullet) => {
-          if (bullet.update(environment, canvas.width, canvas.height)) {
-            bullet.render(ctx);
-          }
-        });
+
+      if (opponentPlayer.current) {
+        // Render opponent only if not dead
+        if (!isOpponentDead) {
+          opponentPlayer.current.render(ctx);
+        }
+        // Update and render opponent bullets without conditional update check
+        if (
+          opponentPlayer.current.gun &&
+          Array.isArray(opponentPlayer.current.gun.bullets)
+        ) {
+          opponentPlayer.current.gun.bullets.forEach((bulletObj) => {
+            bulletObj.bullet.update(environment, canvas.width, canvas.height);
+            bulletObj.bullet.render(ctx);
+          });
+          // Filter out bullets that exit canvas bounds
+          opponentPlayer.current.gun.bullets =
+            opponentPlayer.current.gun.bullets.filter(
+              (bulletObj) =>
+                bulletObj.bullet.x >= 0 &&
+                bulletObj.bullet.x <= canvas.width &&
+                bulletObj.bullet.y >= 0 &&
+                bulletObj.bullet.y <= canvas.height
+            );
+        }
       }
 
       // Bullet collision detection
@@ -121,15 +138,16 @@ const GameCanvas = ({ socket }) => {
       ) {
         const shooterId = opponentPlayer.current.id;
         const target = player.current;
+        // Changed: iterate over bulletObj and use bulletObj.bullet for collision detection
         opponentPlayer.current.gun.bullets =
-          opponentPlayer.current.gun.bullets.filter((bullet) => {
-            if (bullet.checkCollisionWithPlayer(target)) {
+          opponentPlayer.current.gun.bullets.filter((bulletObj) => {
+            if (bulletObj.bullet.checkCollisionWithPlayer(target)) {
               socket.send(
                 JSON.stringify({
                   type: "PLAYER_HIT",
                   clientId: target.id, // player hit
                   attackerId: shooterId, // shooter
-                  health: target.health - bullet.damage,
+                  health: target.health - bulletObj.bullet.damage,
                 })
               );
               return false; // remove bullet
@@ -402,9 +420,17 @@ const GameCanvas = ({ socket }) => {
           }
           break;
 
-        case "SHOOT":
+        case "SHOOT": {
+          console.log("Received SHOOT event:", data);
           const { position: shootPosition } = data;
-          // Ensure shootPosition includes a valid angle. Fallback if undefined.
+          if (
+            !shootPosition ||
+            shootPosition.x === undefined ||
+            shootPosition.y === undefined
+          ) {
+            console.error("Invalid shootPosition received:", shootPosition);
+            break;
+          }
           const angle =
             shootPosition.angle !== undefined
               ? shootPosition.angle
@@ -412,10 +438,15 @@ const GameCanvas = ({ socket }) => {
               ? opponentPlayer.current.gun.gunAngle
               : 0;
           if (opponentPlayer.current) {
-            const bullet = new Bullet(shootPosition.x, shootPosition.y, angle);
-            opponentPlayer.current.gun.bullets.push(bullet);
+            const bulletObject = {
+              bullet: new Bullet(shootPosition.x, shootPosition.y, angle),
+              createdAt: Date.now(),
+            };
+            opponentPlayer.current.gun.bullets.push(bulletObject);
+            console.log("Added bullet object:", bulletObject);
           }
           break;
+        }
 
         case "PLAYER_HIT":
           // data.health is an object mapping playerId -> health
