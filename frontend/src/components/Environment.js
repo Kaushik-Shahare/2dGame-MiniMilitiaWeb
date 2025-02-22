@@ -15,6 +15,12 @@ class Environment {
     this.treeImage = new Image();
     this.treeImage.src = "/sprite/tree.png";
 
+    // Load grass and sand images for obstacles
+    this.grassImage = new Image();
+    this.grassImage.src = "/sprite/grass.png";
+    this.sandImage = new Image();
+    this.sandImage.src = "/sprite/sand.png";
+
     this.obstacles = [
       { x: 400, y: fixedHeight - 250, width: 100, height: 50 },
       { x: 300, y: fixedHeight - 450, width: 100, height: 50 },
@@ -88,7 +94,7 @@ class Environment {
         0, // X position of the image (start at 0)
         0, // Y position of the image (start at the top)
         fixedWidth, // Stretch the image across the full width
-        fixedHeight // Stretch the image to cover the full height
+        fixedHeight, // Stretch the image to cover the full height
       );
     } else {
       // Fallback color if background image is not loaded
@@ -108,7 +114,7 @@ class Environment {
           x,
           this.groundLevel,
           imageWidth,
-          fixedHeight - this.groundLevel // Stretch the ground to fit height
+          fixedHeight - this.groundLevel, // Stretch the ground to fit height
         );
       }
     } else {
@@ -117,15 +123,9 @@ class Environment {
         0,
         this.groundLevel,
         fixedWidth,
-        fixedHeight - this.groundLevel
+        fixedHeight - this.groundLevel,
       );
     }
-
-    // Draw obstacles
-    ctx.fillStyle = "gray";
-    this.obstacles.forEach((obs) => {
-      ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
-    });
 
     // Draw tree
     ctx.drawImage(
@@ -133,7 +133,7 @@ class Environment {
       100,
       this.groundLevel - this.treeImage.height + 226,
       300,
-      400
+      400,
     );
 
     ctx.drawImage(
@@ -141,8 +141,39 @@ class Environment {
       600,
       this.groundLevel - this.treeImage.height + 226,
       300,
-      400
+      400,
     );
+
+    // Render obstacles: fit grass to top half and sand to bottom half using obstacle dimensions
+    this.obstacles.forEach((obs) => {
+      // Draw grass covering the top half of the obstacle
+      if (this.grassImage.complete) {
+        ctx.drawImage(
+          this.grassImage,
+          obs.x,
+          obs.y - 10,
+          obs.width,
+          obs.height / 2,
+        );
+      } else {
+        ctx.fillStyle = "green";
+        ctx.fillRect(obs.x, obs.y, obs.width, obs.height / 2);
+      }
+
+      // Draw sand covering the bottom half of the obstacle
+      if (this.sandImage.complete) {
+        ctx.drawImage(
+          this.sandImage,
+          obs.x,
+          obs.y + obs.height / 2 - 10,
+          obs.width,
+          obs.height / 2 + 10,
+        );
+      } else {
+        ctx.fillStyle = "yellow";
+        ctx.fillRect(obs.x, obs.y + obs.height / 2, obs.width, obs.height / 2);
+      }
+    });
 
     ctx.restore();
   }
