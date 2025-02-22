@@ -53,10 +53,13 @@ Mini Militia is a browser-based 2D multiplayer game built with React and canvas.
 3. Start the server using `node server.js`.
 
 ## Game Controls
-- **Movement:** Arrow keys or A/D for left/right.
-- **Jump/Jetpack:** Up arrow, W or Space. The jetpack is controlled via fuel management.
-- **Crouch:** Control keys to pause movement and reduce character height.
-- **Shooting:** Mouse click initiates shooting; use mouse movement for aiming.
+
+- **Movement:** Use Left/Right Arrow keys or A/D keys to move.
+- **Jump/Jetpack:** Press Up Arrow, W, or Space to jump; hold to activate the jetpack when airborne.
+- **Crouch:** Hold the Control (Ctrl) key to crouch.
+- **Aim:** Move the mouse within a fixed radius (pointer lock in fullscreen mode) to adjust aim.
+- **Shoot:** Click the mouse button to fire.
+- **Reload:** Press R to reload the weapon when ammo is low.
 
 ## Multiplayer Flow
 1. **Room Creation:** Players can create rooms using the UI dialog.
