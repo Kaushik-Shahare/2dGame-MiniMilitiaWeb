@@ -1,19 +1,19 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "Mini Militia Web - by Kaushik Shahare",
+  "name": "A browser-based Mini Militia multiplayer game built with React and WebSockets.",
   "icons": [
     {
-      "src": "favicon.ico",
+      "src": "main-player.png",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/x-icon"
     },
     {
-      "src": "logo192.png",
+      "src": "main-player.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "logo512.png",
+      "src": "main-player.png",
       "type": "image/png",
       "sizes": "512x512"
     }

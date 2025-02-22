@@ -64,22 +64,27 @@ export default class Gun {
   handleMouseDown(socket = null, roomId = null) {
     if (this.isReloading) return;
     if (this.ammo > 0) {
-      // Position the bullet at the tip of the gun
+      // Calculate a random offset in radians (e.g. ±0.05)
+      const randomOffset = (Math.random() - 0.5) * 0.1;
+      // Use the modified angle for bullet firing
+      const bulletAngle = this.gunAngle + randomOffset;
+      
+      // Position the bullet at the tip of the gun based on bulletAngle
       const startX =
         this.player.x +
         this.player.width / 2 +
-        Math.cos(this.gunAngle) * this.gunLength;
+        Math.cos(bulletAngle) * this.gunLength;
       const startY =
         this.player.y +
         this.player.height / 2 +
-        Math.sin(this.gunAngle) * this.gunLength;
-
-      // Create a new bullet
-      const bullet = new Bullet(startX, startY, this.gunAngle);
-      bullet.playSound(); // Play bullet sound when fired
+        Math.sin(bulletAngle) * this.gunLength;
+      
+      // Create a new bullet with the random angle
+      const bullet = new Bullet(startX, startY, bulletAngle);
+      bullet.playSound();
       this.bullets.push(bullet);
 
-      // Send shooting information to the server
+      // Send shooting information to the server if applicable
       if (socket && roomId && socket.readyState === WebSocket.OPEN) {
         socket.send(
           JSON.stringify({
@@ -88,7 +93,7 @@ export default class Gun {
             position: {
               x: startX,
               y: startY,
-              angle: this.gunAngle,
+              angle: bulletAngle,
             },
           })
         );
