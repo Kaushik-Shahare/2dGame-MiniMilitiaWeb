@@ -6,11 +6,11 @@ import Gun from "./Gun";
 import RoomDialog from "./RoomDialog";
 
 const GameCanvas = ({ socket }) => {
+  const opponentsRef = useRef([]);
   const containerRef = useRef(null); // NEW: container reference for fullscreen
   const canvasRef = useRef(null);
   const roomIdRef = useRef(null);
   const player = useRef(new Player(100, 500)); // Main player instance
-  const opponentPlayer = useRef(null); // Opponent player instance
   const environment = new Environment();
   const animationFrameId = useRef(null);
   const fixedWidth = 1280; // Example width
@@ -27,6 +27,8 @@ const GameCanvas = ({ socket }) => {
   const [ranking, setRanking] = useState([]);
   const cursorPosition = useRef({ x: fixedWidth / 2, y: fixedHeight / 2 });
   const [notification, setNotification] = useState(null); // New: Notification state
+  // New state for showing all scores
+  const [showScores, setShowScores] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -82,79 +84,48 @@ const GameCanvas = ({ socket }) => {
         player.current.render(ctx);
       }
 
-      if (opponentPlayer.current) {
-        // Render opponent only if not dead
-        if (!isOpponentDead) {
-          opponentPlayer.current.render(ctx);
-        }
-        // Update and render opponent bullets without conditional update check
-        if (
-          opponentPlayer.current.gun &&
-          Array.isArray(opponentPlayer.current.gun.bullets)
-        ) {
-          opponentPlayer.current.gun.bullets.forEach((bulletObj) => {
-            bulletObj.bullet.update(environment, canvas.width, canvas.height);
-            bulletObj.bullet.render(ctx);
-          });
-          // Filter out bullets that exit canvas bounds
-          opponentPlayer.current.gun.bullets =
-            opponentPlayer.current.gun.bullets.filter(
+      // Render all opponent players independently
+      opponentsRef.current.forEach((opp) => {
+        if (!opp.isDead) {
+          opp.update(environment);
+          opp.render(ctx);
+          if (opp.gun && Array.isArray(opp.gun.bullets)) {
+            opp.gun.bullets.forEach((bulletObj) => {
+              bulletObj.bullet.update(environment, canvas.width, canvas.height);
+              bulletObj.bullet.render(ctx);
+            });
+            opp.gun.bullets = opp.gun.bullets.filter(
               (bulletObj) =>
                 bulletObj.bullet.x >= 0 &&
                 bulletObj.bullet.x <= canvas.width &&
                 bulletObj.bullet.y >= 0 &&
                 bulletObj.bullet.y <= canvas.height
             );
+          }
         }
-      }
+      });
 
       // Bullet collision detection
       // Optimized bullet collision detection using filter
-      if (opponentPlayer.current && opponentPlayer.current.health > 0) {
-        const shooterId = player.current.id;
-        const target = opponentPlayer.current;
-        player.current.gun.bullets = player.current.gun.bullets.filter(
-          (bullet) => {
-            if (bullet.checkCollisionWithPlayer(target)) {
+      opponentsRef.current.forEach((opp) => {
+        if (opp.health > 0) {
+          const shooterId = player.current.id;
+          player.current.gun.bullets = player.current.gun.bullets.filter((bullet) => {
+            if (bullet.checkCollisionWithPlayer(opp)) {
               socket.send(
                 JSON.stringify({
                   type: "PLAYER_HIT",
-                  clientId: target.id, // player hit
-                  attackerId: shooterId, // shooter
-                  health: target.health - bullet.damage,
-                })
-              );
-              return false; // remove bullet
-            }
-            return true;
-          }
-        );
-      }
-
-      if (
-        player.current &&
-        player.current.health > 0 &&
-        opponentPlayer.current
-      ) {
-        const shooterId = opponentPlayer.current.id;
-        const target = player.current;
-        // Changed: iterate over bulletObj and use bulletObj.bullet for collision detection
-        opponentPlayer.current.gun.bullets =
-          opponentPlayer.current.gun.bullets.filter((bulletObj) => {
-            if (bulletObj.bullet.checkCollisionWithPlayer(target)) {
-              socket.send(
-                JSON.stringify({
-                  type: "PLAYER_HIT",
-                  clientId: target.id, // player hit
-                  attackerId: shooterId, // shooter
-                  health: target.health - bulletObj.bullet.damage,
+                  clientId: opp.id,
+                  attackerId: shooterId,
+                  health: opp.health - bullet.damage,
                 })
               );
               return false; // remove bullet
             }
             return true;
           });
-      }
+        }
+      });
 
       // Add: Render local player's bullets
       if (!isRespawning) {
@@ -356,6 +327,18 @@ const GameCanvas = ({ socket }) => {
             iconSize
           );
         }
+
+        // Calculate next top score (if ranking has more than one entry)
+        let nextTopScore = "N/A";
+        if (ranking.length > 1) {
+          // Assuming player id 'You' indicates current player
+          const sorted = [...ranking].sort((a, b) => b.score - a.score);
+          if (sorted[0].id === "You" && sorted.length >= 2) {
+            nextTopScore = sorted[1].score;
+          } else {
+            nextTopScore = sorted[0].score;
+          }
+        }
       }
 
       // Send player position to server and request next frame
@@ -394,6 +377,7 @@ const GameCanvas = ({ socket }) => {
     timer,
     isRespawning,
     isOpponentDead,
+    ranking,
   ]);
 
   useEffect(() => {
@@ -401,17 +385,18 @@ const GameCanvas = ({ socket }) => {
       const data = JSON.parse(event.data);
 
       switch (data.type) {
-        case "UPDATE_POSITION":
+        case "UPDATE_POSITION": {
           const { clientId, position } = data;
-          if (!opponentPlayer.current) {
-            opponentPlayer.current = new Player(position.x, position.y, false);
-            opponentPlayer.current.id = clientId; // assign opponent id
-            opponentPlayer.current.gun = new Gun(opponentPlayer.current); // initialize opponent's gun
+          if (clientId === player.current.id) break;
+          // Try to find an existing opponent
+          let opp = opponentsRef.current.find((o) => o.id === clientId);
+          if (!opp) {
+            opp = new Player(position.x, position.y, false);
+            opp.id = clientId; // assign opponent id
+            opp.gun = new Gun(opp);
+            opponentsRef.current.push(opp);
           } else {
-            if (!opponentPlayer.current.id) {
-              opponentPlayer.current.id = clientId; // ensure id is set
-            }
-            opponentPlayer.current.updatePosition(
+            opp.updatePosition(
               position.x,
               position.y,
               position.isCrouching,
@@ -419,130 +404,104 @@ const GameCanvas = ({ socket }) => {
             );
           }
           break;
-
+        }
         case "SHOOT": {
-          console.log("Received SHOOT event:", data);
-          const { position: shootPosition } = data;
-          if (
-            !shootPosition ||
-            shootPosition.x === undefined ||
-            shootPosition.y === undefined
-          ) {
-            console.error("Invalid shootPosition received:", shootPosition);
-            break;
-          }
-          const angle =
-            shootPosition.angle !== undefined
-              ? shootPosition.angle
-              : opponentPlayer.current && opponentPlayer.current.gun
-              ? opponentPlayer.current.gun.gunAngle
-              : 0;
-          if (opponentPlayer.current) {
+          const { clientId, position: shootPosition } = data;
+          if (clientId === player.current.id) break;
+          let opp = opponentsRef.current.find((o) => o.id === clientId);
+          if (opp) {
+            const angle =
+              shootPosition.angle !== undefined
+                ? shootPosition.angle
+                : opp.gun.gunAngle;
             const bulletObject = {
               bullet: new Bullet(shootPosition.x, shootPosition.y, angle),
               createdAt: Date.now(),
             };
-            opponentPlayer.current.gun.bullets.push(bulletObject);
-            console.log("Added bullet object:", bulletObject);
+            opp.gun.bullets.push(bulletObject);
           }
           break;
         }
-
-        case "PLAYER_HIT":
-          // data.health is an object mapping playerId -> health
+        case "PLAYER_HIT": {
           const healthData = data.health;
           if (healthData && typeof healthData === "object") {
             if (healthData[player.current.id] !== undefined) {
               player.current.health = healthData[player.current.id];
             }
-            if (
-              opponentPlayer.current &&
-              healthData[opponentPlayer.current.id] !== undefined
-            ) {
-              opponentPlayer.current.health =
-                healthData[opponentPlayer.current.id];
-            }
+            opponentsRef.current.forEach((opp) => {
+              if (healthData[opp.id] !== undefined) {
+                opp.health = healthData[opp.id];
+              }
+            });
           }
           break;
-
-        case "PLAYER_DEATH":
+        }
+        case "PLAYER_DEATH": {
           if (data.playerId === player.current.id) {
-            // If current player dies, update opponent score if applicable and mark as dead.
-            if (
-              opponentPlayer.current &&
-              data.attackerId === opponentPlayer.current.id
-            ) {
-              setOpponentScore((prev) => prev + 10);
-            }
             player.current.isDead = true;
             setIsRespawning(true);
             setRespawnCountdown(5);
-            // Removed duplicate setTimeout respawn here; will wait for PLAYER_RESPAWN event.
-          } else if (
-            opponentPlayer.current &&
-            data.playerId === opponentPlayer.current.id
-          ) {
-            // If opponent dies, update local score and mark opponent as dead.
-            if (data.attackerId === player.current.id) {
-              setLocalScore((prev) => prev + 10);
+          } else {
+            const opp = opponentsRef.current.find((o) => o.id === data.playerId);
+            if (opp) {
+              opp.isDead = true;
             }
-            opponentPlayer.current.isDead = true;
-            setIsOpponentDead(true);
-            // Removed duplicate setTimeout respawn here.
           }
           break;
-
-        case "PLAYER_RESPAWN":
+        }
+        case "PLAYER_RESPAWN": {
           if (data.playerId === player.current.id) {
             player.current.respawn();
             setIsRespawning(false);
             setRespawnCountdown(0);
-          } else if (
-            opponentPlayer.current &&
-            data.playerId === opponentPlayer.current.id
-          ) {
-            opponentPlayer.current.respawn();
-            setIsOpponentDead(false);
+          } else {
+            const opp = opponentsRef.current.find((o) => o.id === data.playerId);
+            if (opp) {
+              opp.respawn();
+            }
           }
           break;
-
+        }
         // New: Handle round time from server
         case "ROUND_TIME":
           setTimer(data.roundTime);
           break;
         // New: Handle score update from server
-        case "SCORE_UPDATE":
+        case "SCORE_UPDATE": {
           if (data.scores) {
             const localId = player.current.id;
             setLocalScore(data.scores[localId] || 0);
-            const opponentId = opponentPlayer.current
-              ? opponentPlayer.current.id
-              : null;
-            setOpponentScore(
-              opponentId && data.scores[opponentId]
-                ? data.scores[opponentId]
-                : 0
-            );
+            // Compute maximum opponent score instead of summing all scores
+            let maxOppScore = 0;
+            let rankingList = [];
+            for (const id in data.scores) {
+              rankingList.push({ id, score: data.scores[id] });
+              if (id !== localId && data.scores[id] > maxOppScore) {
+                maxOppScore = data.scores[id];
+              }
+            }
+            setOpponentScore(maxOppScore);
+            setRanking(rankingList);
           }
           break;
+        }
 
         case "ROUND_OVER":
           setIsRoundOver(true);
           // Compute ranking using server scores
           let ranks = [];
-          if (opponentPlayer.current) {
-            ranks = [
-              { id: "You", score: localScore },
-              { id: "Opponent", score: opponentScore },
-            ];
-          } else {
-            ranks = [{ id: "You", score: localScore }];
-          }
+          ranks.push({ id: "You", score: localScore });
+          opponentsRef.current.forEach((opp) => {
+            ranks.push({ id: opp.id, score: data.scores ? data.scores[opp.id] || 0 : 0 });
+          });
           ranks.sort((a, b) => b.score - a.score);
           setRanking(ranks);
           break;
 
         case "PLAYER_LEFT":
+          // Remove the opponent from the array on PLAYER_LEFT
+          const { clientId } = data;
+          opponentsRef.current = opponentsRef.current.filter((opp) => opp.id !== clientId);
           setNotification(data.message);
           setTimeout(() => {
             setNotification(null);
@@ -798,6 +757,60 @@ const GameCanvas = ({ socket }) => {
           }}
         >
           {notification}
+        </div>
+      )}
+      <button
+        onClick={() => setShowScores(!showScores)}
+        style={{
+          position: "fixed",
+          bottom: "20px",
+          left: "20px",
+          padding: "10px 20px",
+          background: "#4CAF50",
+          color: "#fff",
+          border: "none",
+          borderRadius: "5px",
+          cursor: "pointer",
+          zIndex: 1600,
+        }}
+      >
+        Show All Scores
+      </button>
+      {showScores && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "70px",
+            left: "20px",
+            background: "#333",
+            color: "#fff",
+            padding: "15px",
+            borderRadius: "5px",
+            zIndex: 1600,
+          }}
+        >
+          <h3>All Player Scores</h3>
+          <ul style={{ listStyleType: "none", padding: 0, margin: 0 }}>
+            {ranking.map((item, index) => (
+              <li key={index} style={{ margin: "5px 0" }}>
+                {index + 1}. {item.id}: {item.score}
+              </li>
+            ))}
+          </ul>
+          <button
+            onClick={() => setShowScores(false)}
+            style={{
+              marginTop: "10px",
+              padding: "5px 10px",
+              background: "#f44336",
+              color: "#fff",
+              border: "none",
+              borderRadius: "3px",
+              cursor: "pointer",
+            }}
+          >
+            Close
+          </button>
         </div>
       )}
       <RoomDialog

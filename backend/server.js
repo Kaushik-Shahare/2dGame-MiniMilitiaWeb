@@ -25,7 +25,7 @@ const server = app.listen(PORT, () => {
 const wss = new WebSocket.Server({ server });
 
 // Store rooms
-const rooms = new Map(); // roomId -> { players: Set of clients, scores: {}, health: {}, dead: {}, roundTime: number, timerInterval: NodeJS.Timeout }
+const rooms = new Map(); // roomId -> { players: Set of clients, scores: {}, health: {}, dead: {}, playerNames: {}, roundTime: number, timerInterval: NodeJS.Timeout }
 
 // WebSocket connection handling
 wss.on("connection", (ws) => {
@@ -47,10 +47,16 @@ wss.on("connection", (ws) => {
             scores: {},
             health: {},
             dead: {},
+            playerNames: {}, // New: mapping of clientId -> name
             roundTime: 300, // starting round time in seconds
           });
           rooms.get(roomId).players.add(ws);
+          // Store player's name sent from client
           clientId = data.clientId;
+          rooms.get(roomId).scores[data.clientId] = 0;
+          rooms.get(roomId).health[data.clientId] = 100;
+          rooms.get(roomId).dead[data.clientId] = false;
+          rooms.get(roomId).playerNames[data.clientId] = data.name || "You";
           ws.send(JSON.stringify({ type: "ROOM_CREATED", roomId }));
           console.log(`Room created: ${roomId}`);
           // Start a timer for the room to broadcast roundTime updates
@@ -71,16 +77,20 @@ wss.on("connection", (ws) => {
 
         case "JOIN_ROOM":
           roomId = data.roomId;
-          if (rooms.has(roomId) && rooms.get(roomId).players.size < 2) {
+          // Updated: Allow up to 8 players 
+          if (rooms.has(roomId) && rooms.get(roomId).players.size < 8) {
             rooms.get(roomId).players.add(ws);
             rooms.get(roomId).scores[data.clientId] = 0;
             rooms.get(roomId).health[data.clientId] = 100; // Initialize health
             rooms.get(roomId).dead[data.clientId] = false; // Initialize dead flag
+            // Store the joining player's name
+            rooms.get(roomId).playerNames[data.clientId] = data.name || "You";
             clientId = data.clientId;
             ws.send(JSON.stringify({ type: "ROOM_JOINED", roomId }));
             broadcastToRoom(roomId, {
               type: "PLAYER_JOINED",
               clientId,
+              name: data.name || "You",
             });
             console.log(`Client ${clientId} joined room: ${roomId}`);
           } else {
@@ -123,15 +133,16 @@ wss.on("connection", (ws) => {
 
         case "PLAYER_HIT":
           if (roomId && rooms.has(roomId)) {
-            // Update the hit player's health in room state
+            // Update health
             rooms.get(roomId).health[data.clientId] = data.health;
-            // Broadcast the complete health object so each client can update properly
+            // Broadcast health update to all in room
             broadcastToRoom(roomId, {
               type: "PLAYER_HIT",
               health: rooms.get(roomId).health,
             });
-            // When health falls to 0, handle death and respawn logic
+            // If the hit player's health is 0 or below, handle death
             if (data.health <= 0) {
+              // Increase the attacker’s score by 10
               rooms.get(roomId).scores[data.attackerId] =
                 (rooms.get(roomId).scores[data.attackerId] || 0) + 10;
               rooms.get(roomId).dead[data.clientId] = true;
@@ -140,10 +151,11 @@ wss.on("connection", (ws) => {
                 playerId: data.clientId,
                 attackerId: data.attackerId,
               });
-              // New: Broadcast scores update so that both clients are in-sync
+              // Send SCORE_UPDATE with the updated scores mapping
               broadcastToRoom(roomId, {
                 type: "SCORE_UPDATE",
                 scores: rooms.get(roomId).scores,
+                names: rooms.get(roomId).playerNames
               });
               setTimeout(() => {
                 rooms.get(roomId).dead[data.clientId] = false;
@@ -186,6 +198,7 @@ wss.on("connection", (ws) => {
       delete rooms.get(roomId).scores[clientId];
       delete rooms.get(roomId).health[clientId];
       delete rooms.get(roomId).dead[clientId];
+      delete rooms.get(roomId).playerNames[clientId]; // Remove player's name
       // Updated broadcast to include a message with the player's id
       broadcastToRoom(roomId, {
         type: "PLAYER_LEFT",
