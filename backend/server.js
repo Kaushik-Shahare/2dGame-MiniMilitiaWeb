@@ -142,7 +142,7 @@ wss.on("connection", (ws) => {
             });
             // If the hit player's health is 0 or below, handle death
             if (data.health <= 0) {
-              // Increase the attacker’s score by 10
+              // Increase the attacker's score by 10
               rooms.get(roomId).scores[data.attackerId] =
                 (rooms.get(roomId).scores[data.attackerId] || 0) + 10;
               rooms.get(roomId).dead[data.clientId] = true;
@@ -184,6 +184,29 @@ wss.on("connection", (ws) => {
           }
           break;
 
+        case "RTC_OFFER":
+        case "RTC_ANSWER":
+        case "RTC_ICE":
+          // Relay signaling messages to the target client in the same room
+          if (roomId && rooms.has(roomId)) {
+            const targetClientId = data.targetClientId;
+            // Find the WebSocket for the target client
+            let targetWs = null;
+            rooms.get(roomId).players.forEach((client) => {
+              if (client !== ws && client._clientId === targetClientId) {
+                targetWs = client;
+              }
+            });
+            // If not found by _clientId, try to send to all except sender (for now)
+            if (targetWs) {
+              targetWs.send(JSON.stringify(data));
+            } else {
+              // Fallback: broadcast to all except sender
+              broadcastToRoom(roomId, data, ws);
+            }
+          }
+          break;
+
         default:
           console.error("Unknown message type:", data.type);
       }
@@ -219,6 +242,8 @@ wss.on("connection", (ws) => {
   ws.on("error", (err) => {
     console.error(`WebSocket error for client ${clientId}:`, err.message);
   });
+
+  ws._clientId = clientId; // Store clientId for signaling
 });
 
 // Helper to generate unique room IDs

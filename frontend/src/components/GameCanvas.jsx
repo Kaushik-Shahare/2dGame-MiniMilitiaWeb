@@ -29,6 +29,12 @@ const GameCanvas = ({ socket }) => {
   const [notification, setNotification] = useState(null); // New: Notification state
   // New state for showing all scores
   const [showScores, setShowScores] = useState(false);
+  const peerConnectionsRef = useRef({}); // clientId -> RTCPeerConnection
+  const dataChannelsRef = useRef({}); // clientId -> RTCDataChannel
+  const [webrtcReady, setWebrtcReady] = useState(false);
+  const [connectedPeers, setConnectedPeers] = useState([]);
+  const lastSentPositionRef = useRef({});
+  const lastUpdateTimeRef = useRef(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -654,6 +660,169 @@ const GameCanvas = ({ socket }) => {
           playerId,
         })
       );
+    }
+  };
+
+  // Helper: Send signaling message via WebSocket
+  const sendSignal = (type, payload) => {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type, ...payload }));
+    }
+  };
+
+  // Helper: Create PeerConnection and DataChannel
+  const createPeerConnection = (clientId, isInitiator) => {
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+      ],
+    });
+    peerConnectionsRef.current[clientId] = pc;
+
+    // DataChannel for movement
+    let dc;
+    if (isInitiator) {
+      dc = pc.createDataChannel("movement");
+      setupDataChannel(clientId, dc);
+    } else {
+      pc.ondatachannel = (event) => {
+        setupDataChannel(clientId, event.channel);
+      };
+    }
+
+    // ICE candidates
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        sendSignal("RTC_ICE", {
+          targetClientId: clientId,
+          candidate: event.candidate,
+          roomId: roomIdRef.current?.value,
+        });
+      }
+    };
+
+    return pc;
+  };
+
+  // Setup DataChannel event handlers
+  function setupDataChannel(clientId, dc) {
+    dataChannelsRef.current[clientId] = dc;
+    dc.onopen = () => {
+      setConnectedPeers((prev) => [...new Set([...prev, clientId])]);
+      setWebrtcReady(true);
+    };
+    dc.onclose = () => {
+      setConnectedPeers((prev) => prev.filter((id) => id !== clientId));
+    };
+    dc.onmessage = (event) => {
+      try {
+        const movement = JSON.parse(event.data);
+        handlePeerMovement(movement);
+      } catch (e) {
+        // Ignore non-movement messages
+      }
+    };
+  }
+
+  // WebSocket signaling message handler
+  useEffect(() => {
+    if (!socket) return;
+    const handleSignal = async (event) => {
+      const data = JSON.parse(event.data);
+      if (!data.type) return;
+      switch (data.type) {
+        case "PLAYER_JOINED": {
+          // Initiate WebRTC connection to new player
+          const newClientId = data.clientId;
+          if (newClientId !== player.current.id) {
+            const pc = createPeerConnection(newClientId, true);
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            sendSignal("RTC_OFFER", {
+              targetClientId: newClientId,
+              offer,
+              roomId: roomIdRef.current?.value,
+            });
+          }
+          break;
+        }
+        case "RTC_OFFER": {
+          const fromId = data.fromClientId || data.targetClientId;
+          if (fromId === player.current.id) break;
+          const pc = createPeerConnection(fromId, false);
+          await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          sendSignal("RTC_ANSWER", {
+            targetClientId: fromId,
+            answer,
+            roomId: roomIdRef.current?.value,
+          });
+          break;
+        }
+        case "RTC_ANSWER": {
+          const fromId = data.fromClientId || data.targetClientId;
+          if (fromId === player.current.id) break;
+          const pc = peerConnectionsRef.current[fromId];
+          if (pc) {
+            await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+          }
+          break;
+        }
+        case "RTC_ICE": {
+          const fromId = data.fromClientId || data.targetClientId;
+          if (fromId === player.current.id) break;
+          const pc = peerConnectionsRef.current[fromId];
+          if (pc && data.candidate) {
+            await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    };
+    socket.addEventListener("message", handleSignal);
+    return () => socket.removeEventListener("message", handleSignal);
+  }, [socket]);
+
+  // Movement update loop at 30Hz (every ~33ms)
+  useEffect(() => {
+    if (!webrtcReady) return;
+    let intervalId = null;
+    function sendMovementUpdate() {
+      const now = Date.now();
+      if (now - lastUpdateTimeRef.current < 33) return;
+      lastUpdateTimeRef.current = now;
+      const movement = {
+        x: player.current.x,
+        y: player.current.y,
+        isCrouching: player.current.isCrouching,
+        gunAngle: player.current.gun.gunAngle,
+        id: player.current.id,
+      };
+      Object.values(dataChannelsRef.current).forEach((dc) => {
+        if (dc.readyState === "open") {
+          dc.send(JSON.stringify(movement));
+        }
+      });
+    }
+    intervalId = setInterval(sendMovementUpdate, 33);
+    return () => clearInterval(intervalId);
+  }, [webrtcReady, connectedPeers]);
+
+  // Handle incoming movement updates from peers
+  const handlePeerMovement = (movement) => {
+    const { id, x, y, isCrouching, gunAngle } = movement;
+    if (!id || id === player.current.id) return;
+    let opp = opponentsRef.current.find((o) => o.id === id);
+    if (!opp) {
+      opp = new Player(x, y, false);
+      opp.id = id;
+      opp.gun = new Gun(opp);
+      opponentsRef.current.push(opp);
+    } else {
+      opp.updatePosition(x, y, isCrouching, gunAngle);
     }
   };
 
