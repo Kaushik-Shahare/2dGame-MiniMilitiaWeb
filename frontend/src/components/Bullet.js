@@ -1,81 +1,110 @@
-export default class Bullet {
-  constructor(startX, startY, angle) {
-    this.damage = 10;
-    this.x = startX;
-    this.y = startY;
-    this.speed = 8; // Bullet speed
-    this.velocityX = Math.cos(angle) * this.speed;
-    this.velocityY = Math.sin(angle) * this.speed;
-    // Initialize trail array for smooth motion effect
-    this.trail = [];
-
-    // Load bullet sound
-    this.sound = new Audio("/sounds/submachineGun.mp3");
-    this.sound.volume = 0.5; // Adjust volume
+/**
+ * Client-side Bullet - Only handles rendering
+ * All physics handled server-side
+ */
+export default class ClientBullet {
+  constructor(bulletState) {
+    this.id = bulletState.id;
+    this.x = bulletState.x;
+    this.y = bulletState.y;
+    this.angle = bulletState.angle;
+    this.ownerId = bulletState.ownerId;
+    this.active = bulletState.active;
+    
+    // Client-side rendering properties
+    this.trail = bulletState.trail || [];
+    this.lastUpdate = Date.now();
+    
+    // Interpolation for smooth movement
+    this.targetX = this.x;
+    this.targetY = this.y;
+    this.interpolationSpeed = 0.8;
+    
+    // Visual effects
+    this.opacity = 1;
+    this.fadeOut = false;
   }
 
-  playSound() {
-    this.sound.currentTime = 0; // Reset sound to start
-    // this.sound.play();
-  }
-
-  checkCollisionWithPlayer(player) {
-    return (
-      this.x >= player.x &&
-      this.x <= player.x + player.width &&
-      this.y >= player.y &&
-      this.y <= player.y + player.height
-    );
-  }
-
-  update(environment, canvasWidth, canvasHeight, dt = 1) {
-    // Add current position to trail
-    this.trail.push({ x: this.x, y: this.y });
-    if (this.trail.length > 10) {
-      this.trail.shift();
+  // Update from server state
+  updateFromServer(bulletState) {
+    this.targetX = bulletState.x;
+    this.targetY = bulletState.y;
+    this.trail = bulletState.trail || [];
+    this.active = bulletState.active;
+    this.lastUpdate = Date.now();
+    
+    if (!this.active) {
+      this.fadeOut = true;
     }
+  }
 
-    // Use dt multiplier for smooth movement
-    this.x += this.velocityX * dt;
-    this.y += this.velocityY * dt;
-
-    // Check collision with environment if defined
-    if (
-      environment &&
-      typeof environment.checkGunCollision === "function" &&
-      environment.checkGunCollision(this.x, this.y)
-    ) {
+  // Client-side interpolation and rendering update
+  update(deltaTime = 16.67) {
+    if (!this.active && this.opacity <= 0) {
       return false; // Remove bullet
     }
-
-    // Check canvas bounds only if dimensions are provided
-    if (
-      typeof canvasWidth === "number" &&
-      typeof canvasHeight === "number" &&
-      (this.x < 0 ||
-        this.x > canvasWidth ||
-        this.y < 0 ||
-        this.y > canvasHeight)
-    ) {
-      return false;
+    
+    // Fade out effect when bullet is destroyed
+    if (this.fadeOut) {
+      this.opacity -= 0.05;
+      if (this.opacity <= 0) {
+        return false;
+      }
     }
+    
+    // Smooth interpolation to target position
+    const dx = this.targetX - this.x;
+    const dy = this.targetY - this.y;
+    
+    this.x += dx * this.interpolationSpeed;
+    this.y += dy * this.interpolationSpeed;
+    
+    // Snap if very close
+    if (Math.abs(dx) < 0.1 && Math.abs(dy) < 0.1) {
+      this.x = this.targetX;
+      this.y = this.targetY;
+    }
+    
     return true;
   }
 
+  // Render the bullet with trail effect
   render(ctx) {
-    // Render trail for smooth animation effect
-    for (let i = 0; i < this.trail.length; i++) {
-      const point = this.trail[i];
-      const opacity = (i + 1) / this.trail.length;
-      ctx.fillStyle = `rgba(0, 0, 0, ${opacity * 0.5})`;
-      ctx.beginPath();
-      ctx.arc(point.x, point.y, 2, 0, Math.PI * 2);
-      ctx.fill();
+    if (!this.active && this.opacity <= 0) return;
+    
+    ctx.save();
+    ctx.globalAlpha = this.opacity;
+    
+    // Render trail for visual effect
+    if (this.trail && this.trail.length > 0) {
+      for (let i = 0; i < this.trail.length; i++) {
+        const point = this.trail[i];
+        const trailOpacity = ((i + 1) / this.trail.length) * 0.5 * this.opacity;
+        ctx.fillStyle = `rgba(255, 100, 0, ${trailOpacity})`;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
-    // Draw bullet on top
-    ctx.fillStyle = "black";
+    
+    // Render main bullet
+    ctx.fillStyle = this.active ? "rgba(255, 0, 0, 1)" : "rgba(255, 100, 0, 0.8)";
     ctx.beginPath();
     ctx.arc(this.x, this.y, 5, 0, Math.PI * 2);
     ctx.fill();
+    
+    // Add glow effect
+    ctx.shadowColor = "red";
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.restore();
+  }
+
+  // Check if bullet should be removed
+  shouldRemove() {
+    return !this.active && this.opacity <= 0;
   }
 }

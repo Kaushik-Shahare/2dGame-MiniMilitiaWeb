@@ -3,6 +3,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const WebSocket = require("ws");
+const GameRoom = require('./GameRoom');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -13,7 +14,19 @@ app.use(cors());
 
 // Routes
 app.get("/", (req, res) => {
-  res.send("Welcome to the multiplayer Express backend!");
+  res.send("Welcome to the MiniMilitia multiplayer backend - Server Authoritative!");
+});
+
+app.get("/stats", (req, res) => {
+  const stats = {
+    activeRooms: gameRooms.size,
+    totalPlayers: Array.from(gameRooms.values()).reduce((sum, room) => sum + room.players.size, 0),
+    totalBullets: Array.from(gameRooms.values()).reduce((sum, room) => sum + room.bullets.size, 0),
+    uptime: process.uptime(),
+    memoryUsage: process.memoryUsage(),
+    roomDetails: Array.from(gameRooms.values()).map(room => room.getStats())
+  };
+  res.json(stats);
 });
 
 // Create HTTP server
@@ -24,13 +37,39 @@ const server = app.listen(PORT, () => {
 // Set up WebSocket server
 const wss = new WebSocket.Server({ server });
 
-// Store rooms
-const rooms = new Map(); // roomId -> { players: Set of clients, scores: {}, health: {}, dead: {}, playerNames: {}, roundTime: number, timerInterval: NodeJS.Timeout }
+// Store game rooms with server-side game logic
+const gameRooms = new Map(); // roomId -> GameRoom instance
+
+// Performance monitoring
+setInterval(() => {
+  if (gameRooms.size > 0) {
+    console.log(`\n=== Server Statistics ===`);
+    console.log(`Active rooms: ${gameRooms.size}`);
+    
+    let totalPlayers = 0;
+    let totalBullets = 0;
+    
+    gameRooms.forEach((room, roomId) => {
+      const stats = room.getStats();
+      totalPlayers += stats.playerCount;
+      totalBullets += stats.bulletCount;
+      
+      if (stats.playerCount > 0) {
+        console.log(`Room ${roomId}: ${stats.playerCount} players, ${stats.bulletCount} bullets, avg tick: ${stats.avgTickTime}ms`);
+      }
+    });
+    
+    console.log(`Total: ${totalPlayers} players, ${totalBullets} bullets`);
+    console.log(`Memory usage: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
+    console.log(`=========================\n`);
+  }
+}, 30000); // Every 30 seconds
 
 // WebSocket connection handling
 wss.on("connection", (ws) => {
   let clientId = null;
   let roomId = null;
+  let currentRoom = null;
 
   console.log("New WebSocket connection established");
 
@@ -40,210 +79,143 @@ wss.on("connection", (ws) => {
 
       switch (data.type) {
         case "CREATE_ROOM":
-          // Generate a unique room ID
           roomId = generateRoomId();
-          rooms.set(roomId, {
-            players: new Set(),
-            scores: {},
-            health: {},
-            dead: {},
-            playerNames: {}, // New: mapping of clientId -> name
-            roundTime: 300, // starting round time in seconds
-          });
-          rooms.get(roomId).players.add(ws);
-          // Store player's name sent from client
           clientId = data.clientId;
-          rooms.get(roomId).scores[data.clientId] = 0;
-          rooms.get(roomId).health[data.clientId] = 100;
-          rooms.get(roomId).dead[data.clientId] = false;
-          rooms.get(roomId).playerNames[data.clientId] = data.name || "You";
+          
+          // Create new game room with server-side logic
+          currentRoom = new GameRoom(roomId);
+          gameRooms.set(roomId, currentRoom);
+          
+          // Add player to the room
+          currentRoom.addPlayer(clientId, ws, data.name || "Player");
+          
           ws.send(JSON.stringify({ type: "ROOM_CREATED", roomId }));
-          console.log(`Room created: ${roomId}`);
-          // Start a timer for the room to broadcast roundTime updates
-          rooms.get(roomId).timerInterval = setInterval(() => {
-            const room = rooms.get(roomId);
-            if (!room) return;
-            room.roundTime -= 1;
-            broadcastToRoom(roomId, {
-              type: "ROUND_TIME",
-              roundTime: room.roundTime,
-            });
-            if (room.roundTime <= 0) {
-              clearInterval(room.timerInterval);
-              broadcastToRoom(roomId, { type: "ROUND_OVER" });
-            }
-          }, 1000);
+          console.log(`Room created: ${roomId} by player ${clientId}`);
           break;
 
         case "JOIN_ROOM":
           roomId = data.roomId;
-          // Updated: Allow up to 8 players 
-          if (rooms.has(roomId) && rooms.get(roomId).players.size < 8) {
-            rooms.get(roomId).players.add(ws);
-            rooms.get(roomId).scores[data.clientId] = 0;
-            rooms.get(roomId).health[data.clientId] = 100; // Initialize health
-            rooms.get(roomId).dead[data.clientId] = false; // Initialize dead flag
-            // Store the joining player's name
-            rooms.get(roomId).playerNames[data.clientId] = data.name || "You";
-            clientId = data.clientId;
-            ws.send(JSON.stringify({ type: "ROOM_JOINED", roomId }));
-            broadcastToRoom(roomId, {
-              type: "PLAYER_JOINED",
-              clientId,
-              name: data.name || "You",
-            });
-            console.log(`Client ${clientId} joined room: ${roomId}`);
+          clientId = data.clientId;
+          
+          if (gameRooms.has(roomId)) {
+            currentRoom = gameRooms.get(roomId);
+            
+            // Check room capacity (max 8 players)
+            if (currentRoom.players.size < 8) {
+              currentRoom.addPlayer(clientId, ws, data.name || "Player");
+              
+              ws.send(JSON.stringify({ 
+                type: "ROOM_JOINED", 
+                roomId,
+                message: `Joined room ${roomId}` 
+              }));
+            } else {
+              ws.send(JSON.stringify({ 
+                type: "ERROR", 
+                message: "Room is full" 
+              }));
+            }
           } else {
-            ws.send(
-              JSON.stringify({
-                type: "ERROR",
-                message: "Room is full or does not exist",
-              })
-            );
+            ws.send(JSON.stringify({ 
+              type: "ERROR", 
+              message: "Room does not exist" 
+            }));
           }
           break;
 
+        case "PLAYER_INPUT":
+          // Handle all player input through the game room
+          if (currentRoom && clientId) {
+            currentRoom.handlePlayerInput(clientId, data);
+          }
+          break;
+
+        // Legacy support for old message types (redirect to PLAYER_INPUT)
         case "MOVE":
-          if (roomId && rooms.has(roomId)) {
-            broadcastToRoom(
-              roomId,
-              {
-                type: "UPDATE_POSITION",
-                clientId,
-                position: data.position,
-              },
-              ws
-            );
+          if (currentRoom && clientId) {
+            currentRoom.handlePlayerInput(clientId, {
+              type: "MOVE",
+              keys: data.keys,
+              gunAngle: data.gunAngle
+            });
           }
           break;
 
         case "SHOOT":
-          if (roomId && rooms.has(roomId)) {
-            broadcastToRoom(
-              roomId,
-              {
-                type: "SHOOT",
-                clientId,
-                position: data.position,
-              },
-              ws
-            );
+          if (currentRoom && clientId) {
+            currentRoom.handlePlayerInput(clientId, {
+              type: "SHOOT"
+            });
           }
           break;
 
         case "PLAYER_HIT":
-          if (roomId && rooms.has(roomId)) {
-            // Update health
-            rooms.get(roomId).health[data.clientId] = data.health;
-            // Broadcast health update to all in room
-            broadcastToRoom(roomId, {
-              type: "PLAYER_HIT",
-              health: rooms.get(roomId).health,
-            });
-            // If the hit player's health is 0 or below, handle death
-            if (data.health <= 0) {
-              // Increase the attacker's score by 10
-              rooms.get(roomId).scores[data.attackerId] =
-                (rooms.get(roomId).scores[data.attackerId] || 0) + 10;
-              rooms.get(roomId).dead[data.clientId] = true;
-              broadcastToRoom(roomId, {
-                type: "PLAYER_DEATH",
-                playerId: data.clientId,
-                attackerId: data.attackerId,
-              });
-              // Send SCORE_UPDATE with the updated scores mapping
-              broadcastToRoom(roomId, {
-                type: "SCORE_UPDATE",
-                scores: rooms.get(roomId).scores,
-                names: rooms.get(roomId).playerNames
-              });
-              setTimeout(() => {
-                rooms.get(roomId).dead[data.clientId] = false;
-                rooms.get(roomId).health[data.clientId] = 100;
-                broadcastToRoom(roomId, {
-                  type: "PLAYER_RESPAWN",
-                  playerId: data.clientId,
-                  health: 100,
-                });
-              }, 5000);
-            }
-          }
+          // Server now handles hit detection, ignore client messages
+          console.log("Client sent PLAYER_HIT - ignored (server authoritative)");
           break;
 
         case "PLAYER_DEATH":
-          if (roomId && rooms.has(roomId)) {
-            rooms.get(roomId).dead[data.playerId] = true; // Set dead flag
-            broadcastToRoom(roomId, data);
-            setTimeout(() => {
-              rooms.get(roomId).dead[data.playerId] = false; // Reset dead flag
-              broadcastToRoom(roomId, {
-                type: "PLAYER_RESPAWN",
-                playerId: data.playerId,
-              });
-            }, 5000); // Respawn player after 5 seconds
-          }
+          // Server now handles death detection, ignore client messages  
+          console.log("Client sent PLAYER_DEATH - ignored (server authoritative)");
           break;
 
         case "RTC_OFFER":
         case "RTC_ANSWER":
         case "RTC_ICE":
-          // Relay signaling messages to the target client in the same room
-          if (roomId && rooms.has(roomId)) {
-            const targetClientId = data.targetClientId;
-            // Find the WebSocket for the target client
-            let targetWs = null;
-            rooms.get(roomId).players.forEach((client) => {
-              if (client !== ws && client._clientId === targetClientId) {
-                targetWs = client;
-              }
-            });
-            // If not found by _clientId, try to send to all except sender (for now)
-            if (targetWs) {
-              targetWs.send(JSON.stringify(data));
-            } else {
-              // Fallback: broadcast to all except sender
-              broadcastToRoom(roomId, data, ws);
+          // Still allow WebRTC signaling for voice/video
+          if (roomId && gameRooms.has(roomId)) {
+            const room = gameRooms.get(roomId);
+            const targetClient = Array.from(room.clients).find(
+              client => client._clientId === data.targetClientId
+            );
+            
+            if (targetClient) {
+              targetClient.send(JSON.stringify({
+                type: data.type,
+                payload: data.payload,
+                senderClientId: clientId,
+              }));
             }
           }
+          break;
+
+        case "PING":
+          // Handle ping for latency measurement
+          ws.send(JSON.stringify({
+            type: "PING",
+            timestamp: data.timestamp
+          }));
           break;
 
         default:
           console.error("Unknown message type:", data.type);
       }
     } catch (error) {
-      console.error("Invalid message received:", message);
+      console.error("Invalid message received:", message, "Error:", error.message);
     }
   });
 
   ws.on("close", () => {
-    if (roomId && rooms.has(roomId)) {
-      rooms.get(roomId).players.delete(ws);
-      delete rooms.get(roomId).scores[clientId];
-      delete rooms.get(roomId).health[clientId];
-      delete rooms.get(roomId).dead[clientId];
-      delete rooms.get(roomId).playerNames[clientId]; // Remove player's name
-      // Updated broadcast to include a message with the player's id
-      broadcastToRoom(roomId, {
-        type: "PLAYER_LEFT",
-        clientId,
-        message: `Player ${clientId} left the room`,
-      });
-      console.log(`Client ${clientId} disconnected from room: ${roomId}`);
-
-      // Clean up empty room
-      if (rooms.get(roomId).players.size === 0) {
-        clearInterval(rooms.get(roomId).timerInterval); // Clear the timer interval
-        rooms.delete(roomId);
-        console.log(`Room ${roomId} deleted`);
+    if (currentRoom && clientId) {
+      currentRoom.removePlayer(clientId, ws);
+      
+      // Clean up empty rooms
+      if (currentRoom.players.size === 0) {
+        currentRoom.destroy();
+        gameRooms.delete(roomId);
+        console.log(`Empty room ${roomId} cleaned up`);
       }
     }
+    
+    console.log(`Client ${clientId} disconnected from room: ${roomId}`);
   });
 
   ws.on("error", (err) => {
     console.error(`WebSocket error for client ${clientId}:`, err.message);
   });
 
-  ws._clientId = clientId; // Store clientId for signaling
+  // Store clientId for WebRTC signaling
+  ws._clientId = clientId;
 });
 
 // Helper to generate unique room IDs
@@ -251,19 +223,27 @@ function generateRoomId() {
   return Math.random().toString(36).substr(2, 9);
 }
 
-// Broadcast to all clients in a specific room
-function broadcastToRoom(roomId, message, excludeClient = null) {
-  if (rooms.has(roomId)) {
-    rooms.get(roomId).players.forEach((client) => {
-      if (client !== excludeClient) {
-        try {
-          client.send(JSON.stringify(message));
-        } catch (err) {
-          console.error("Error sending message to client:", err.message);
-        }
-      }
-    });
-  }
-}
-
 console.log(`WebSocket server running on ws://localhost:${PORT}`);
+console.log("Server-authoritative game architecture enabled!");
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+  console.log('\nShutting down server...');
+  
+  // Clean up all game rooms
+  gameRooms.forEach((room) => {
+    room.destroy();
+  });
+  gameRooms.clear();
+  
+  // Close WebSocket server
+  wss.close(() => {
+    console.log('WebSocket server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  process.exit(0);
+});

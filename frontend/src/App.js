@@ -5,8 +5,8 @@ const App = () => {
   const [socket, setSocket] = useState(null);
 
   useEffect(() => {
-    // const ws = new WebSocket("ws://localhost:3001");
-    const ws = new WebSocket("wss://minimilitia-backend-kaushik.onrender.com");
+    const ws = new WebSocket("ws://localhost:3001");
+    // const ws = new WebSocket("wss://minimilitia-backend-kaushik.onrender.com");
     setSocket(ws);
 
     return () => ws.close();

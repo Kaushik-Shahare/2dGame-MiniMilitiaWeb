@@ -1,333 +1,322 @@
-import Gun from "./Gun";
-import PlayerSkin from "./PlayerSkin";
+import PlayerSkin from './PlayerSkin';
 
-const fixedWidth = 1280; // Example width
-const fixedHeight = 720;
-
-const health = 100;
-const width = 50;
-const height = 70;
-const gravity = 0.8;
-const jumpStrength = -10;
-const speed = 5;
-
-const jetpack_fuel_max = 100;
-const jetpack_force = -0.4; // Upward force from the jetpack
-const jetpack_force_max = -4.5; // Maximum upward force from the jetpack
-const jetpack_fuel_depletion = 0.4; // Fuel depletion rate
-const jetpack_fuel_regen = 0.5; // Fuel regeneration rate
-const jetpack_regen_delay = 8; // Delay before fuel regeneration starts (in ms);
-
-export default class Player {
+/**
+ * Client-side Player - Only handles rendering and local input
+ * All physics and state management now handled server-side
+ */
+export default class ClientPlayer {
   constructor(x, y, isMainPlayer = true) {
-    // Assign a unique id to each player instance
-    this.id = Math.random().toString(36).substring(2, 10);
-
+    // Visual properties
     this.x = x;
     this.y = y;
-    this.width = width;
-    this.height = height;
-    this.velocityX = 0;
-    this.velocityY = 0;
-    this.gravity = gravity;
-    this.jumpStrength = jumpStrength;
-    this.speed = speed;
-    this.onGround = false;
-    this.color = "blue";
-
-    // Crouch state and height adjustment
+    this.width = 50;
+    this.height = 70;
+    this.id = null;
+    
+    // Rendering state (received from server)
+    this.health = 100;
+    this.isDead = false;
     this.isCrouching = false;
-
-    // Jetpack properties
-    this.jetpackFuel = jetpack_fuel_max;
     this.isUsingJetpack = false;
-    this.jetpackRegenTimeout = null;
-
-    // Jetpack sound
-    this.jetpackSound = new Audio("/sounds/jetpack.mp3");
-    this.jetpackSound.loop = true; // To continuously play the sound
-
-    // Gun
-    this.gun = new Gun(this);
-
-    this.health = health;
-    this.isDead = false; // Initialize dead flag
-
-    if (!isMainPlayer) {
-      this.color = "red";
-    }
-
-    if (isMainPlayer === true) {
-      window.addEventListener("keydown", this.handleKeyDown.bind(this));
-      window.addEventListener("keyup", this.handleKeyUp.bind(this));
-      window.addEventListener(
-        "mousemove",
-        this.gun.handleMouseMove.bind(this.gun)
-      );
-      window.addEventListener("mousedown", (e) => this.gun.handleMouseDown(e));
-    }
-
-    // Initialize PlayerSkin
+    this.gunAngle = 0;
+    this.ammo = 25;
+    this.maxAmmo = 25;
+    this.isReloading = false;
+    this.jetpackFuel = 100;
+    this.onGround = true;
+    
+    // Rendering properties
+    this.color = isMainPlayer ? "blue" : "red";
     this.playerSkin = new PlayerSkin(isMainPlayer);
+    
+    // Client-side prediction state (for main player only)
+    this.isMainPlayer = isMainPlayer;
+    this.predictedX = x;
+    this.predictedY = y;
+    this.predictedVelocityX = 0;
+    this.predictedVelocityY = 0;
+    
+    // Input state (for main player)
+    this.keys = {
+      left: false,
+      right: false,
+      up: false,
+      crouch: false
+    };
+    
+    // Smooth interpolation
+    this.targetX = x;
+    this.targetY = y;
+    this.interpolationSpeed = 0.2; // Increased for more responsive movement
+    
+    // For lag compensation
+    this.lastServerUpdate = 0;
+    this.serverDelay = 0;
   }
 
+  // Update from authoritative server state
+  updateFromServer(serverState) {
+    // Update all server-authoritative state
+    this.health = serverState.health;
+    this.isDead = serverState.isDead;
+    this.isCrouching = serverState.isCrouching;
+    this.isUsingJetpack = serverState.isUsingJetpack;
+    this.gunAngle = serverState.gunAngle;
+    this.ammo = serverState.ammo;
+    this.maxAmmo = serverState.maxAmmo || 25;
+    this.isReloading = serverState.isReloading;
+    this.jetpackFuel = serverState.jetpackFuel;
+    this.onGround = serverState.onGround;
+    this.id = serverState.id;
+    
+    // Update rendering height based on crouching
+    this.height = this.isCrouching ? 50 : 70;
+    
+    this.lastServerUpdate = Date.now();
+    
+    // Handle position updates differently for main player vs others
+    if (this.isMainPlayer) {
+      // For main player, use server position as authoritative
+      // but allow smooth interpolation to it
+      this.targetX = serverState.x;
+      this.targetY = serverState.y;
+      this.reconcileWithServer(serverState);
+    } else {
+      // For other players, store target for interpolation
+      this.targetX = serverState.x;
+      this.targetY = serverState.y;
+    }
+  }
+
+  // Reconcile client prediction with server state (for main player)
+  reconcileWithServer(serverState) {
+    // Use smooth interpolation to server position instead of snapping
+    const timeSinceUpdate = Date.now() - this.lastServerUpdate;
+    const maxInterpolationTime = 100; // ms
+    
+    // If it's been too long since last update, snap to server position
+    if (timeSinceUpdate > maxInterpolationTime) {
+      console.log(`[Main Player] Snapping due to old update: ${timeSinceUpdate}ms ago`);
+      this.x = serverState.x;
+      this.y = serverState.y;
+      this.predictedX = serverState.x;
+      this.predictedY = serverState.y;
+      return;
+    }
+    
+    // Calculate position difference
+    const positionThreshold = 15; // Increased threshold to reduce corrections
+    const xDiff = Math.abs(this.x - serverState.x);
+    const yDiff = Math.abs(this.y - serverState.y);
+    
+    // Log position differences for debugging
+    if (xDiff > 1 || yDiff > 1) {
+      console.log(`[Main Player] Position diff: dx=${xDiff.toFixed(1)}, dy=${yDiff.toFixed(1)}, client(${this.x.toFixed(1)}, ${this.y.toFixed(1)}), server(${serverState.x.toFixed(1)}, ${serverState.y.toFixed(1)})`);
+    }
+    
+    // If prediction is significantly off, smoothly correct it
+    if (xDiff > positionThreshold || yDiff > positionThreshold) {
+      console.log(`[Main Player] Large deviation detected - letting interpolation handle correction`);
+    }
+    
+    // Reset prediction to server position
+    this.predictedX = serverState.x;
+    this.predictedY = serverState.y;
+  }
+
+  // Client-side prediction update (for main player only)
+  predictiveUpdate(keys, deltaTime = 16.67) {
+    if (!this.isMainPlayer || this.isDead) return;
+    
+    // Store input for server
+    this.keys = { ...keys };
+    
+    // Smooth interpolation to server position with adaptive speed
+    const timeSinceUpdate = Date.now() - this.lastServerUpdate;
+    let interpolationSpeed = 0.3; // Base speed
+    
+    // If server update is recent, use faster interpolation
+    if (timeSinceUpdate < 50) {
+      interpolationSpeed = 0.4;
+    } else if (timeSinceUpdate > 200) {
+      // If server update is old, be more cautious
+      interpolationSpeed = 0.1;
+    }
+    
+    const dx = this.targetX - this.x;
+    const dy = this.targetY - this.y;
+    
+    this.x += dx * interpolationSpeed;
+    this.y += dy * interpolationSpeed;
+    
+    // Snap if very close to avoid floating point precision issues
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
+      this.x = this.targetX;
+      this.y = this.targetY;
+    }
+  }
+
+  // Smooth interpolation update (for other players)
+  interpolateUpdate() {
+    if (this.isMainPlayer) return;
+    
+    // Smooth interpolation to target position
+    const dx = this.targetX - this.x;
+    const dy = this.targetY - this.y;
+    
+    this.x += dx * this.interpolationSpeed;
+    this.y += dy * this.interpolationSpeed;
+    
+    // Snap to target if very close
+    if (Math.abs(dx) < 0.1 && Math.abs(dy) < 0.1) {
+      this.x = this.targetX;
+      this.y = this.targetY;
+    }
+  }
+
+  // Handle input events (main player only)
   handleKeyDown(e) {
+    if (!this.isMainPlayer) return;
+    
     if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") {
-      this.velocityX = this.speed;
+      this.keys.right = true;
     }
     if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") {
-      this.velocityX = -this.speed;
+      this.keys.left = true;
     }
-    if (
-      e.key === "ArrowUp" ||
-      e.key === "w" ||
-      e.key === "W" ||
-      e.key === " "
-    ) {
-      if (this.onGround) {
-        this.velocityY = this.jumpStrength;
-      } else if (this.jetpackFuel > 0) {
-        this.isUsingJetpack = true;
-        this.playJetpackSound();
-      }
+    if (e.key === "ArrowUp" || e.key === "w" || e.key === "W" || e.key === " ") {
+      this.keys.up = true;
     }
-    if (
-      e.key === "Control" ||
-      e.key === "ControlLeft" ||
-      e.key === "ControlRight"
-    ) {
-      this.isCrouching = true;
+    if (e.key === "Control" || e.key === "ControlLeft" || e.key === "ControlRight") {
+      this.keys.crouch = true;
     }
   }
 
   handleKeyUp(e) {
-    if (
-      e.key === "ArrowRight" ||
-      e.key === "ArrowLeft" ||
-      e.key === "d" ||
-      e.key === "a" ||
-      e.key === "D" ||
-      e.key === "A"
-    ) {
-      this.velocityX = 0;
+    if (!this.isMainPlayer) return;
+    
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft" || e.key === "d" || e.key === "a" || e.key === "D" || e.key === "A") {
+      this.keys.right = false;
+      this.keys.left = false;
     }
-    if (
-      e.key === "ArrowUp" ||
-      e.key === "w" ||
-      e.key === "W" ||
-      e.key === " "
-    ) {
-      this.isUsingJetpack = false;
-      this.stopJetpackSound();
+    if (e.key === "ArrowUp" || e.key === "w" || e.key === "W" || e.key === " ") {
+      this.keys.up = false;
     }
-    if (
-      e.key === "Control" ||
-      e.key === "ControlLeft" ||
-      e.key === "ControlRight"
-    ) {
-      this.isCrouching = false;
+    if (e.key === "Control" || e.key === "ControlLeft" || e.key === "ControlRight") {
+      this.keys.crouch = false;
     }
   }
 
-  playJetpackSound() {
-    // Play jetpack sound if fuel is available and sound is not already playing
-    if (this.jetpackSound.paused && this.jetpackFuel > 1) {
-      // this.jetpackSound.play();
-    } else {
-      // Restart sound if it's already playing
-      this.jetpackSound.currentTime = 0;
-    }
-  }
-
-  stopJetpackSound() {
-    if (!this.jetpackSound.paused) {
-      // this.jetpackSound.pause();
-      this.jetpackSound.currentTime = 0;
-    }
-  }
-
-  update(environment) {
-    if (this.isDead) return; // Do not update if the player is dead
-
-    this.y += this.velocityY;
-    this.x += this.velocityX;
-
-    // Adjust player height when crouching
-    if (this.isCrouching) {
-      this.speed = speed / 3;
-      this.height = height * (3 / 4);
-    } else {
-      this.speed = speed;
-      this.height = height;
-    }
-
-    // Apply gravity
-    if (!this.isUsingJetpack) {
-      this.velocityY += this.gravity;
-    }
-
-    // Jetpack force and fuel depletion
-    if (this.isUsingJetpack && this.jetpackFuel > 0) {
-      if (this.velocityY > jetpack_force_max) {
-        this.velocityY += jetpack_force;
-      }
-      this.jetpackFuel -= jetpack_fuel_depletion;
-      if (this.jetpackFuel <= 0) {
-        this.jetpackFuel = 0;
-        this.isUsingJetpack = false;
-        this.stopJetpackSound();
-      }
-    }
-
-    const canvasWidth = fixedWidth;
-    const canvasHeight = fixedHeight;
-    const groundLevel = environment.getGroundLevel(this.x, this.width);
-
-    // Handle ground level logic
-    if (this.y + this.height > groundLevel) {
-      this.y = groundLevel - this.height;
-      this.velocityY = 0;
-      if (!this.onGround) {
-        this.onGround = true;
-      }
-      // NEW: Instead of scheduling regeneration via setTimeout/interval,
-      // immediately regenerate fuel each frame when on the ground.
-      if (!this.isUsingJetpack && this.jetpackFuel < jetpack_fuel_max) {
-        this.jetpackFuel += jetpack_fuel_regen; // per frame increase
-        if (this.jetpackFuel > jetpack_fuel_max) {
-          this.jetpackFuel = jetpack_fuel_max;
-        }
-      }
-    } else {
-      this.onGround = false;
-    }
-
-    // Check for collisions on the x and y axes
-    if (
-      environment.checkCollisionOnX(
-        this.x,
-        this.y,
-        this.width,
-        this.height,
-        this.velocityX
-      )
-    ) {
-      this.x -= this.velocityX;
-      this.velocityX = 0;
-    }
-
-    if (
-      environment.checkCollisionOnY(
-        this.x,
-        this.y,
-        this.width,
-        this.height,
-        this.velocityY
-      )
-    ) {
-      this.y -= this.velocityY;
-      this.velocityY = 0;
-    }
-
-    // Ensure health does not go below 0
-    if (this.health < 0) {
-      this.health = 0;
-    }
-
-    // Player Bounds
-    if (this.x < 0) this.x = 0;
-    if (this.x + this.width > canvasWidth) this.x = canvasWidth - this.width;
-    if (this.y < 0) this.y = 0;
-    if (this.y + this.height > canvasHeight)
-      this.y = canvasHeight - this.height;
-
-    this.gun.updateBullets(environment, canvasWidth, canvasHeight);
-  }
-
+  // Render the player
   render(ctx) {
-    if (this.isDead) return; // Do not render if the player is dead
+    if (this.isDead) return;
 
     ctx.save();
     ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
 
     // Rotate the player if aiming left
-    if (this.gun.gunAngle < -Math.PI / 2 || this.gun.gunAngle > Math.PI / 2) {
+    if (this.gunAngle < -Math.PI / 2 || this.gunAngle > Math.PI / 2) {
       ctx.scale(-1, 1);
     }
 
-    // Render the player skin
+    // Use PlayerSkin for rendering
     this.playerSkin.render(
       ctx,
       this.width,
       this.height,
       this.isUsingJetpack,
-      this.velocityX
+      this.keys.left || this.keys.right ? (this.keys.right ? 1 : -1) : 0
     );
 
     ctx.restore();
 
-    this.gun.render(ctx);
-
-    // New: Render player id below the character and health bar above
-    ctx.save();
-    ctx.font = "14px Arial";
-    ctx.textAlign = "center";
-    ctx.fillStyle = "white";
-    // Draw the player id below the sprite
-    ctx.fillText(this.id, this.x + this.width / 2, this.y + this.height + 15);
-
-    // Draw health bar above the sprite
-    const healthBarWidth = this.width;
-    const healthBarHeight = 5;
-    // Draw background (red)
-    ctx.fillStyle = "black";
-    ctx.fillRect(this.x, this.y - 10, healthBarWidth, healthBarHeight);
-    // Draw current health (green)
-    ctx.fillStyle = "red";
-    ctx.fillRect(
-      this.x,
-      this.y - 10,
-      (this.health / 100) * healthBarWidth,
-      healthBarHeight
-    );
-    ctx.restore();
+    // Render health bar
+    this.renderHealthBar(ctx);
+    
+    // Render jetpack fuel bar
+    this.renderJetpackFuelBar(ctx);
+    
+    // Render ammo counter (for main player)
+    if (this.isMainPlayer) {
+      this.renderAmmoCounter(ctx);
+    }
   }
 
+  renderHealthBar(ctx) {
+    const barWidth = this.width;
+    const barHeight = 6;
+    const barX = this.x;
+    const barY = this.y - 15;
+
+    // Background
+    ctx.fillStyle = "rgba(255, 0, 0, 0.3)";
+    ctx.fillRect(barX, barY, barWidth, barHeight);
+
+    // Health bar
+    const healthPercent = this.health / 100;
+    ctx.fillStyle = healthPercent > 0.5 ? "green" : healthPercent > 0.25 ? "orange" : "red";
+    ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
+
+    // Border
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(barX, barY, barWidth, barHeight);
+  }
+
+  renderJetpackFuelBar(ctx) {
+    const barWidth = this.width;
+    const barHeight = 4;
+    const barX = this.x;
+    const barY = this.y - 8;
+
+    // Background
+    ctx.fillStyle = "rgba(0, 0, 255, 0.3)";
+    ctx.fillRect(barX, barY, barWidth, barHeight);
+
+    // Fuel bar
+    const fuelPercent = this.jetpackFuel / 100;
+    ctx.fillStyle = "cyan";
+    ctx.fillRect(barX, barY, barWidth * fuelPercent, barHeight);
+
+    // Border
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(barX, barY, barWidth, barHeight);
+  }
+
+  renderAmmoCounter(ctx) {
+    ctx.fillStyle = this.isReloading ? "orange" : "white";
+    ctx.font = "bold 16px Arial";
+    ctx.textAlign = "right";
+    ctx.fillText(
+      this.isReloading ? "RELOADING..." : `${this.ammo}/25`,
+      1270,
+      50
+    );
+  }
+
+  // Get current position
   getPosition() {
     return { x: this.x, y: this.y };
   }
 
-  getPlayerData() {
+  // Get input state for sending to server
+  getInputState() {
+    if (!this.isMainPlayer) return null;
+    
     return {
-      x: this.x,
-      y: this.y,
-      isCrouching: this.isCrouching,
-      gunAngle: this.gun.gunAngle,
+      keys: { ...this.keys },
+      gunAngle: this.gunAngle
     };
   }
 
-  updatePosition(x, y, isCrouching, gunAngle) {
-    this.x = x;
-    this.y = y;
-    this.isCrouching = isCrouching;
-
-    // Adjust player height when crouching
-    if (isCrouching) {
-      this.height = height * (3 / 4);
-    } else {
-      this.height = height;
-    }
-
-    this.gun.gunAngle = gunAngle;
-  }
-
-  respawn() {
-    this.isDead = false;
-    this.health = health; // health constant defined above (100)
-    // Reset to spawn coordinates (ensure these match your level design)
-    this.x = 100;
-    this.y = 500;
-    this.velocityX = 0;
-    this.velocityY = 0;
+  // Update gun angle (from mouse movement)
+  updateGunAngle(mouseX, mouseY) {
+    if (!this.isMainPlayer) return;
+    
+    const playerCenterX = this.x + this.width / 2;
+    const playerCenterY = this.y + this.height / 2;
+    
+    this.gunAngle = Math.atan2(mouseY - playerCenterY, mouseX - playerCenterX);
   }
 }
