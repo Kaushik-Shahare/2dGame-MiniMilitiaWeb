@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from "react";
+import React, { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import Player from "./Player";
 import Bullet from "./Bullet";
 import Environment from "./Environment";
@@ -16,9 +16,9 @@ const GameCanvas = ({ socket, isConnected }) => {
   const animationFrameId = useRef(null);
   
   // Game state
-  const fixedWidth = 1280;
-  const fixedHeight = 720;
-  const environment = new Environment();
+  const [canvasSize, setCanvasSize] = useState({ width: 1280, height: 720 });
+  // Initialize environment once
+  const environment = useMemo(() => new Environment(), []);
   
   // Players and bullets (client-side rendering only)
   const mainPlayerRef = useRef(new Player(100, 500, true));
@@ -43,9 +43,25 @@ const GameCanvas = ({ socket, isConnected }) => {
     crouch: false
   });
   
-  const mouseRef = useRef({ x: fixedWidth / 2, y: fixedHeight / 2 });
+  const mouseRef = useRef({ x: 640, y: 360 });
   const lastInputSent = useRef(0);
   const inputSendRate = 30; // 30Hz input sending
+
+  // Handle window resize for responsive canvas
+  useEffect(() => {
+    const handleResize = () => {
+      setCanvasSize({
+        width: window.innerWidth,
+        height: window.innerHeight
+      });
+    };
+
+    // Set initial size
+    handleResize();
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   // Performance monitoring
   const [fps, setFps] = useState(60);
@@ -417,8 +433,8 @@ const GameCanvas = ({ socket, isConnected }) => {
       if (!canvas) return;
       
       const rect = canvas.getBoundingClientRect();
-      const scaleX = fixedWidth / rect.width;
-      const scaleY = fixedHeight / rect.height;
+      const scaleX = canvasSize.width / rect.width;
+      const scaleY = canvasSize.height / rect.height;
       
       mouseRef.current.x = (e.clientX - rect.left) * scaleX;
       mouseRef.current.y = (e.clientY - rect.top) * scaleY;
@@ -446,6 +462,221 @@ const GameCanvas = ({ socket, isConnected }) => {
       document.removeEventListener("mousedown", handleMouseDown);
     };
   }, []);
+
+  // Render UI elements
+  const renderUI = useCallback((ctx) => {
+    // Load health and jetpack icons if not already loaded
+    if (!window.healthIcon) {
+      window.healthIcon = new Image();
+      window.healthIcon.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="red">
+          <path d="M12,21.35L10.55,20.03C5.4,15.36 2,12.27 2,8.5 2,5.41 4.42,3 7.5,3C9.24,3 10.91,3.81 12,5.08C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.41 22,8.5C22,12.27 18.6,15.36 13.45,20.04L12,21.35Z"/>
+        </svg>
+      `);
+    }
+    if (!window.jetpackIcon) {
+      window.jetpackIcon = new Image();
+      window.jetpackIcon.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="blue">
+          <path d="M12,2L13.09,8.26L22,9L13.09,9.74L12,16L10.91,9.74L2,9L10.91,8.26L12,2Z"/>
+        </svg>
+      `);
+    }
+    if (!window.gunSkin) {
+      window.gunSkin = new Image();
+      window.gunSkin.src = "/Ak-47.png";
+    }
+    if (!window.reloadSVG) {
+      window.reloadSVG = new Image();
+      window.reloadSVG.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="white">
+          <circle cx="12" cy="12" r="8" stroke="white" stroke-width="2" fill="none"/>
+          <text x="12" y="16" text-anchor="middle" fill="white" font-size="16">∞</text>
+        </svg>
+      `);
+    }
+
+    const mainPlayer = mainPlayerRef.current;
+    
+    // Helper function to draw rounded rectangles
+    const drawRoundedRect = (x, y, width, height, radius, fillColor) => {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+      ctx.fillStyle = fillColor;
+      ctx.fill();
+    };
+
+    // Health bar and jetpack fuel (top right)
+    const healthBarX = canvasSize.width - 230;
+    const healthBarY = 30;
+    const healthBarWidth = 200;
+    const healthBarHeight = 20;
+    
+    // Health bar
+    ctx.fillStyle = "#A020F0";
+    ctx.fillRect(healthBarX, healthBarY, (mainPlayer.health / 100) * healthBarWidth, healthBarHeight);
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+    
+    // Jetpack fuel bar
+    const jetpackFuelX = canvasSize.width - 230;
+    const jetpackFuelY = 60;
+    const jetpackFuelWidth = 200;
+    const jetpackFuelHeight = 20;
+    ctx.fillStyle = "blue";
+    ctx.fillRect(jetpackFuelX, jetpackFuelY, (mainPlayer.jetpackFuel / 100) * jetpackFuelWidth, jetpackFuelHeight);
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(jetpackFuelX, jetpackFuelY, jetpackFuelWidth, jetpackFuelHeight);
+
+    // Draw icons for health and fuel
+    const iconWidth = 20;
+    const iconHeight = 20;
+    if (window.healthIcon?.complete) {
+      ctx.drawImage(window.healthIcon, healthBarX - iconWidth - 10, healthBarY, iconWidth, iconHeight);
+    }
+    if (window.jetpackIcon?.complete) {
+      ctx.drawImage(window.jetpackIcon, jetpackFuelX - iconWidth - 10, jetpackFuelY, iconWidth, iconHeight);
+    }
+
+    // Border around health/fuel bars
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(
+      healthBarX - iconWidth - 15,
+      healthBarY - 10,
+      healthBarWidth + iconWidth + 20,
+      healthBarHeight + jetpackFuelHeight + 30
+    );
+
+    // Score boxes (top center area)
+    const boxWidth = 100;
+    const boxHeight = 40;
+    
+    // Get own score and first opponent score for display
+    const scoreEntries = Object.entries(scores);
+    const ownScore = scores[mainPlayer.id] || 0;
+    const opponentScore = scoreEntries.find(([id]) => id !== mainPlayer.id)?.[1] || 0;
+    
+    // Local player score (blue box, left side)
+    const localBoxX = canvasSize.width / 2 - 160;
+    const localBoxY = 10;
+    drawRoundedRect(localBoxX, localBoxY, boxWidth, boxHeight, 10, "blue");
+    
+    // Opponent score (red box, right side)
+    const oppBoxX = canvasSize.width / 2 + 80;
+    const oppBoxY = 10;
+    drawRoundedRect(oppBoxX, oppBoxY, boxWidth, boxHeight, 10, "red");
+    
+    // Score text
+    ctx.fillStyle = "white";
+    ctx.font = "bold 20px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(ownScore, localBoxX + boxWidth / 2, localBoxY + boxHeight / 2);
+    ctx.fillText(opponentScore, oppBoxX + boxWidth / 2, oppBoxY + boxHeight / 2);
+
+    // Timer (top center)
+    const minutes = Math.floor(timer / 60);
+    const seconds = timer % 60;
+    const timerBoxX = canvasSize.width / 2 - 50;
+    const timerBoxY = 10;
+    const timerBoxWidth = 120;
+    const timerBoxHeight = 50;
+    drawRoundedRect(timerBoxX, timerBoxY, timerBoxWidth, timerBoxHeight, 10, "black");
+    ctx.fillStyle = timer <= 60 ? "red" : "white";
+    ctx.font = "bold 20px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(
+      `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`,
+      timerBoxX + timerBoxWidth / 2,
+      timerBoxY + timerBoxHeight / 2
+    );
+
+    // Gun stats (top left)
+    const gunStatsX = 100;
+    const gunStatsY = 20;
+    const gunStatsWidth = 200;
+    const gunStatsHeight = 40;
+    
+    // Border around gun stats
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(gunStatsX - 10, gunStatsY - 10, gunStatsWidth + 20, gunStatsHeight + 20);
+    
+    // Draw gun image
+    if (window.gunSkin?.complete) {
+      ctx.drawImage(window.gunSkin, gunStatsX + 20, gunStatsY, gunStatsWidth - 40, gunStatsHeight);
+    }
+    
+    // Draw ammo count
+    ctx.font = "20px Arial";
+    ctx.fillStyle = "white";
+    ctx.textAlign = "center";
+    ctx.fillText(`${mainPlayer.ammo || 25} / ${mainPlayer.maxAmmo || 25}`, gunStatsX + 160, gunStatsY + 35);
+    
+    // Draw reload indicator if reloading
+    if (mainPlayer.isReloading && window.reloadSVG?.complete) {
+      const iconSize = 30;
+      ctx.drawImage(
+        window.reloadSVG,
+        gunStatsX + (gunStatsWidth - iconSize) / 2,
+        gunStatsY + (gunStatsHeight - iconSize) / 2,
+        iconSize,
+        iconSize
+      );
+    }
+
+    // Performance metrics (top right corner)
+    ctx.textAlign = "right";
+    ctx.fillStyle = "yellow";
+    ctx.font = "14px Arial";
+    ctx.fillText(`FPS: ${fps}`, canvasSize.width - 20, 110);
+    
+    // Ping/Connection status
+    ctx.fillStyle = isConnected ? "green" : "red";
+    ctx.fillText(isConnected ? `${ping}ms` : "DISCONNECTED", canvasSize.width - 20, 130);
+
+    // All scores list (if there are multiple players)
+    if (scoreEntries.length > 2) {
+      ctx.textAlign = "left";
+      ctx.fillStyle = "white";
+      ctx.font = "16px Arial";
+      let yOffset = 150;
+      
+      ctx.fillText("Scores:", 20, yOffset);
+      yOffset += 20;
+      
+      scoreEntries.forEach(([playerId, score]) => {
+        const isOwn = playerId === mainPlayer.id;
+        ctx.fillStyle = isOwn ? "yellow" : "white";
+        ctx.fillText(`${playerId}: ${score}`, 30, yOffset);
+        yOffset += 18;
+      });
+    }
+
+    // Notification
+    if (notification) {
+      ctx.textAlign = "center";
+      ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+      ctx.fillRect(canvasSize.width / 2 - 200, canvasSize.height - 80, 400, 40);
+      
+      ctx.fillStyle = "white";
+      ctx.font = "16px Arial";
+      ctx.fillText(notification, canvasSize.width / 2, canvasSize.height - 55);
+    }
+  }, [canvasSize.width, canvasSize.height, notification, fps, ping, isConnected, scores, timer]);
 
   // Send player input to server
   const sendPlayerInput = (inputData) => {
@@ -508,15 +739,15 @@ const GameCanvas = ({ socket, isConnected }) => {
       }
 
       // Clear canvas
-      ctx.clearRect(0, 0, fixedWidth, fixedHeight);
+      ctx.clearRect(0, 0, canvasSize.width, canvasSize.height);
 
       // Calculate scale for responsive canvas
       const rect = canvas.getBoundingClientRect();
-      const scaleX = rect.width / fixedWidth;
-      const scaleY = rect.height / fixedHeight;
+      const scaleX = rect.width / canvasSize.width;
+      const scaleY = rect.height / canvasSize.height;
 
       // Render environment
-      environment.render(ctx, scaleX, scaleY);
+      environment.render(ctx, scaleX, scaleY, canvasSize.width, canvasSize.height);
 
       // Update and render main player with prediction
       const deltaTime = 16.67; // Assume 60fps
@@ -565,7 +796,7 @@ const GameCanvas = ({ socket, isConnected }) => {
         cancelAnimationFrame(animationFrameId.current);
       }
     };
-  }, [otherPlayers, bullets]);
+  }, [otherPlayers, bullets, canvasSize.width, canvasSize.height, environment, renderUI]);
 
   // Ping monitoring
   useEffect(() => {
@@ -577,221 +808,6 @@ const GameCanvas = ({ socket, isConnected }) => {
 
     return () => clearInterval(pingInterval);
   }, [socket]);
-
-  // Render UI elements with rich HUD from old version
-  const renderUI = (ctx) => {
-    // Load health and jetpack icons if not already loaded
-    if (!window.healthIcon) {
-      window.healthIcon = new Image();
-      window.healthIcon.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="red">
-          <path d="M12,21.35L10.55,20.03C5.4,15.36 2,12.27 2,8.5 2,5.41 4.42,3 7.5,3C9.24,3 10.91,3.81 12,5.08C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.41 22,8.5C22,12.27 18.6,15.36 13.45,20.04L12,21.35Z"/>
-        </svg>
-      `);
-    }
-    if (!window.jetpackIcon) {
-      window.jetpackIcon = new Image();
-      window.jetpackIcon.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="blue">
-          <path d="M12,2L13.09,8.26L22,9L13.09,9.74L12,16L10.91,9.74L2,9L10.91,8.26L12,2Z"/>
-        </svg>
-      `);
-    }
-    if (!window.gunSkin) {
-      window.gunSkin = new Image();
-      window.gunSkin.src = "/Ak-47.png";
-    }
-    if (!window.reloadSVG) {
-      window.reloadSVG = new Image();
-      window.reloadSVG.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="white">
-          <circle cx="12" cy="12" r="8" stroke="white" stroke-width="2" fill="none"/>
-          <text x="12" y="16" text-anchor="middle" fill="white" font-size="16">∞</text>
-        </svg>
-      `);
-    }
-
-    const mainPlayer = mainPlayerRef.current;
-    
-    // Helper function to draw rounded rectangles
-    const drawRoundedRect = (x, y, width, height, radius, fillColor) => {
-      ctx.beginPath();
-      ctx.moveTo(x + radius, y);
-      ctx.lineTo(x + width - radius, y);
-      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-      ctx.lineTo(x + width, y + height - radius);
-      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-      ctx.lineTo(x + radius, y + height);
-      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-      ctx.lineTo(x, y + radius);
-      ctx.quadraticCurveTo(x, y, x + radius, y);
-      ctx.closePath();
-      ctx.fillStyle = fillColor;
-      ctx.fill();
-    };
-
-    // Health bar and jetpack fuel (top right)
-    const healthBarX = fixedWidth - 230;
-    const healthBarY = 30;
-    const healthBarWidth = 200;
-    const healthBarHeight = 20;
-    
-    // Health bar
-    ctx.fillStyle = "#A020F0";
-    ctx.fillRect(healthBarX, healthBarY, (mainPlayer.health / 100) * healthBarWidth, healthBarHeight);
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
-    
-    // Jetpack fuel bar
-    const jetpackFuelX = fixedWidth - 230;
-    const jetpackFuelY = 60;
-    const jetpackFuelWidth = 200;
-    const jetpackFuelHeight = 20;
-    ctx.fillStyle = "blue";
-    ctx.fillRect(jetpackFuelX, jetpackFuelY, (mainPlayer.jetpackFuel / 100) * jetpackFuelWidth, jetpackFuelHeight);
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(jetpackFuelX, jetpackFuelY, jetpackFuelWidth, jetpackFuelHeight);
-
-    // Draw icons for health and fuel
-    const iconWidth = 20;
-    const iconHeight = 20;
-    if (window.healthIcon?.complete) {
-      ctx.drawImage(window.healthIcon, healthBarX - iconWidth - 10, healthBarY, iconWidth, iconHeight);
-    }
-    if (window.jetpackIcon?.complete) {
-      ctx.drawImage(window.jetpackIcon, jetpackFuelX - iconWidth - 10, jetpackFuelY, iconWidth, iconHeight);
-    }
-
-    // Border around health/fuel bars
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(
-      healthBarX - iconWidth - 15,
-      healthBarY - 10,
-      healthBarWidth + iconWidth + 20,
-      healthBarHeight + jetpackFuelHeight + 30
-    );
-
-    // Score boxes (top center area)
-    const boxWidth = 100;
-    const boxHeight = 40;
-    
-    // Get own score and first opponent score for display
-    const scoreEntries = Object.entries(scores);
-    const ownScore = scores[mainPlayer.id] || 0;
-    const opponentScore = scoreEntries.find(([id]) => id !== mainPlayer.id)?.[1] || 0;
-    
-    // Local player score (blue box, left side)
-    const localBoxX = fixedWidth / 2 - 160;
-    const localBoxY = 10;
-    drawRoundedRect(localBoxX, localBoxY, boxWidth, boxHeight, 10, "blue");
-    
-    // Opponent score (red box, right side)
-    const oppBoxX = fixedWidth / 2 + 80;
-    const oppBoxY = 10;
-    drawRoundedRect(oppBoxX, oppBoxY, boxWidth, boxHeight, 10, "red");
-    
-    // Score text
-    ctx.fillStyle = "white";
-    ctx.font = "bold 20px Arial";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(ownScore, localBoxX + boxWidth / 2, localBoxY + boxHeight / 2);
-    ctx.fillText(opponentScore, oppBoxX + boxWidth / 2, oppBoxY + boxHeight / 2);
-
-    // Timer (top center)
-    const minutes = Math.floor(timer / 60);
-    const seconds = timer % 60;
-    const timerBoxX = fixedWidth / 2 - 50;
-    const timerBoxY = 10;
-    const timerBoxWidth = 120;
-    const timerBoxHeight = 50;
-    drawRoundedRect(timerBoxX, timerBoxY, timerBoxWidth, timerBoxHeight, 10, "black");
-    ctx.fillStyle = timer <= 60 ? "red" : "white";
-    ctx.font = "bold 20px Arial";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(
-      `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`,
-      timerBoxX + timerBoxWidth / 2,
-      timerBoxY + timerBoxHeight / 2
-    );
-
-    // Gun stats (top left)
-    const gunStatsX = 100;
-    const gunStatsY = 20;
-    const gunStatsWidth = 200;
-    const gunStatsHeight = 40;
-    
-    // Border around gun stats
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(gunStatsX - 10, gunStatsY - 10, gunStatsWidth + 20, gunStatsHeight + 20);
-    
-    // Draw gun image
-    if (window.gunSkin?.complete) {
-      ctx.drawImage(window.gunSkin, gunStatsX + 20, gunStatsY, gunStatsWidth - 40, gunStatsHeight);
-    }
-    
-    // Draw ammo count
-    ctx.font = "20px Arial";
-    ctx.fillStyle = "white";
-    ctx.textAlign = "center";
-    ctx.fillText(`${mainPlayer.ammo || 25} / ${mainPlayer.maxAmmo || 25}`, gunStatsX + 160, gunStatsY + 35);
-    
-    // Draw reload indicator if reloading
-    if (mainPlayer.isReloading && window.reloadSVG?.complete) {
-      const iconSize = 30;
-      ctx.drawImage(
-        window.reloadSVG,
-        gunStatsX + (gunStatsWidth - iconSize) / 2,
-        gunStatsY + (gunStatsHeight - iconSize) / 2,
-        iconSize,
-        iconSize
-      );
-    }
-
-    // Performance metrics (top right corner)
-    ctx.textAlign = "right";
-    ctx.fillStyle = "yellow";
-    ctx.font = "14px Arial";
-    ctx.fillText(`FPS: ${fps}`, fixedWidth - 20, 110);
-    
-    // Ping/Connection status
-    ctx.fillStyle = isConnected ? "green" : "red";
-    ctx.fillText(isConnected ? `${ping}ms` : "DISCONNECTED", fixedWidth - 20, 130);
-
-    // All scores list (if there are multiple players)
-    if (scoreEntries.length > 2) {
-      ctx.textAlign = "left";
-      ctx.fillStyle = "white";
-      ctx.font = "16px Arial";
-      let yOffset = 150;
-      
-      ctx.fillText("Scores:", 20, yOffset);
-      yOffset += 20;
-      
-      scoreEntries.forEach(([playerId, score]) => {
-        const isOwn = playerId === mainPlayer.id;
-        ctx.fillStyle = isOwn ? "yellow" : "white";
-        ctx.fillText(`${playerId}: ${score}`, 30, yOffset);
-        yOffset += 18;
-      });
-    }
-
-    // Notification
-    if (notification) {
-      ctx.textAlign = "center";
-      ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
-      ctx.fillRect(fixedWidth / 2 - 200, fixedHeight - 80, 400, 40);
-      
-      ctx.fillStyle = "white";
-      ctx.font = "16px Arial";
-      ctx.fillText(notification, fixedWidth / 2, fixedHeight - 55);
-    }
-  };
 
   // Render crosshair at mouse position
   const renderCrosshair = (ctx) => {
@@ -917,8 +933,8 @@ const GameCanvas = ({ socket, isConnected }) => {
     >
       <canvas
         ref={canvasRef}
-        width={fixedWidth}
-        height={fixedHeight}
+        width={canvasSize.width}
+        height={canvasSize.height}
         style={{
           border: "2px solid white",
           maxWidth: "100%",

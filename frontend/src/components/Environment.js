@@ -1,9 +1,9 @@
-const fixedWidth = 1280; // Example width
-const fixedHeight = 720;
-
 class Environment {
   constructor() {
-    this.groundLevel = fixedHeight - 200;
+    // Use same fixed dimensions as server for consistent collision detection
+    this.fixedWidth = 1280;
+    this.fixedHeight = 720;
+    this.groundLevel = this.fixedHeight - 200;
 
     // Initialize background and ground images
     this.backgroundImage = new Image();
@@ -21,15 +21,20 @@ class Environment {
     this.sandImage = new Image();
     this.sandImage.src = "/sprite/sand.png";
 
+    // Use same obstacle positions as server
     this.obstacles = [
-      { x: 400, y: fixedHeight - 250, width: 100, height: 50 },
-      { x: 300, y: fixedHeight - 450, width: 100, height: 50 },
-      { x: 600, y: fixedHeight - 550, width: 100, height: 50 },
+      { x: 400, y: this.fixedHeight - 250, width: 100, height: 50 },
+      { x: 300, y: this.fixedHeight - 450, width: 100, height: 50 },
+      { x: 600, y: this.fixedHeight - 550, width: 100, height: 50 },
     ];
   }
 
   getGroundLevel(x, width) {
     return this.groundLevel;
+  }
+
+  getObstacles() {
+    return this.obstacles;
   }
 
   checkGunCollision(x, y) {
@@ -83,51 +88,57 @@ class Environment {
     return false; // No collision
   }
 
-  render(ctx, scaleX, scaleY) {
+  render(ctx, scaleX, scaleY, canvasWidth, canvasHeight) {
     ctx.save();
-    ctx.scale(scaleX, scaleY);
-
-    // Draw background image (once, without repeating)
+    
+    // For the background, we want it to fill the entire screen
+    // So we render it without scaling first
+    ctx.save();
+    // Draw background image to fill entire canvas (screen fitting)
     if (this.backgroundImage.complete) {
       ctx.drawImage(
         this.backgroundImage,
         0, // X position of the image (start at 0)
         0, // Y position of the image (start at the top)
-        fixedWidth, // Stretch the image across the full width
-        fixedHeight, // Stretch the image to cover the full height
+        canvasWidth, // Stretch the image across the full width
+        canvasHeight, // Stretch the image to cover the full height
       );
     } else {
       // Fallback color if background image is not loaded
       ctx.fillStyle = "skyblue";
-      ctx.fillRect(0, 0, fixedWidth, fixedHeight);
+      ctx.fillRect(0, 0, canvasWidth, canvasHeight);
     }
+    ctx.restore();
+    
+    // Now scale for game elements to maintain fixed coordinate system
+    ctx.scale(scaleX, scaleY);
 
-    // Draw ground image (repeat across the canvas width)
+    // Draw ground image (repeat across the fixed game width)
     if (this.groundImage.complete) {
       let imageWidth = this.groundImage.width;
-      let canvasWidth = fixedWidth;
 
-      // Draw the ground image repeatedly across the screen
-      for (let x = 0; x < canvasWidth; x += imageWidth) {
+      // Draw the ground image repeatedly across the game width
+      for (let x = 0; x < this.fixedWidth; x += imageWidth) {
         ctx.drawImage(
           this.groundImage,
           x,
           this.groundLevel,
           imageWidth,
-          fixedHeight - this.groundLevel, // Stretch the ground to fit height
+          this.fixedHeight - this.groundLevel, // Stretch the ground to fit height
         );
       }
     } else {
       // Fallback color for ground if image is not loaded
+      ctx.fillStyle = "brown";
       ctx.fillRect(
         0,
         this.groundLevel,
-        fixedWidth,
-        fixedHeight - this.groundLevel,
+        this.fixedWidth,
+        this.fixedHeight - this.groundLevel,
       );
     }
 
-    // Draw tree
+    // Draw trees at fixed positions
     ctx.drawImage(
       this.treeImage,
       100,
