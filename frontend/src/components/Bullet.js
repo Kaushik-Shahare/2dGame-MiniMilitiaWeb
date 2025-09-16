@@ -2,14 +2,14 @@
  * Client-side Bullet - Only handles rendering
  * All physics handled server-side
  */
-export default class ClientBullet {
+export default class Bullet {
   constructor(bulletState) {
     this.id = bulletState.id;
     this.x = bulletState.x;
     this.y = bulletState.y;
     this.angle = bulletState.angle;
     this.ownerId = bulletState.ownerId;
-    this.active = bulletState.active;
+    this.active = bulletState.active !== false; // Default to true if not specified
     
     // Client-side rendering properties
     this.trail = bulletState.trail || [];
@@ -75,30 +75,48 @@ export default class ClientBullet {
     ctx.save();
     ctx.globalAlpha = this.opacity;
     
-    // Render trail for visual effect
+    // Render trail for visual effect (smaller, more realistic)
     if (this.trail && this.trail.length > 0) {
       for (let i = 0; i < this.trail.length; i++) {
         const point = this.trail[i];
-        const trailOpacity = ((i + 1) / this.trail.length) * 0.5 * this.opacity;
-        ctx.fillStyle = `rgba(255, 100, 0, ${trailOpacity})`;
+        const trailOpacity = ((i + 1) / this.trail.length) * 0.2 * this.opacity;
+        ctx.fillStyle = `rgba(255, 255, 255, ${trailOpacity})`; // White smoke trail
         ctx.beginPath();
-        ctx.arc(point.x, point.y, 3, 0, Math.PI * 2);
+        ctx.arc(point.x, point.y, 2, 0, Math.PI * 2);
         ctx.fill();
       }
     }
     
-    // Render main bullet
-    ctx.fillStyle = this.active ? "rgba(255, 0, 0, 1)" : "rgba(255, 100, 0, 0.8)";
+    // Realistic bullet rendering oriented to direction
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.angle);
+    
+    const bulletLength = 8;
+    const bulletWidth = 3;
+    
+    // Bullet body (metallic brass/copper color)
+    ctx.fillStyle = "#CD7F32"; // Bronze color
+    ctx.fillRect(-bulletLength/2, -bulletWidth/2, bulletLength, bulletWidth);
+    
+    // Bullet tip (darker metal)
+    ctx.fillStyle = "#4A4A4A"; // Dark gray
     ctx.beginPath();
-    ctx.arc(this.x, this.y, 5, 0, Math.PI * 2);
+    ctx.arc(bulletLength/2, 0, bulletWidth/2, -Math.PI/2, Math.PI/2);
     ctx.fill();
     
-    // Add glow effect
-    ctx.shadowColor = "red";
-    ctx.shadowBlur = 10;
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
-    ctx.fill();
+    // Bullet base (brass)
+    ctx.fillStyle = "#B8860B"; // Dark golden rod
+    ctx.fillRect(-bulletLength/2 - 2, -bulletWidth/2, 2, bulletWidth);
+    
+    // Add a subtle glow effect
+    if (this.active) {
+      ctx.shadowColor = "#FFD700";
+      ctx.shadowBlur = 3;
+      ctx.strokeStyle = "#FFD700";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(-bulletLength/2, -bulletWidth/2, bulletLength + 2, bulletWidth);
+      ctx.shadowBlur = 0;
+    }
     
     ctx.restore();
   }

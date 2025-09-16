@@ -24,6 +24,10 @@ export default class ClientPlayer {
     this.isReloading = false;
     this.jetpackFuel = 100;
     this.onGround = true;
+    this.lastShot = 0;
+    
+    // Gun image
+    this.gunImage = null;
     
     // Rendering properties
     this.color = isMainPlayer ? "blue" : "red";
@@ -68,6 +72,11 @@ export default class ClientPlayer {
     this.jetpackFuel = serverState.jetpackFuel;
     this.onGround = serverState.onGround;
     this.id = serverState.id;
+    
+    // Initialize lastShot if not present (for other players)
+    if (!this.lastShot) {
+      this.lastShot = 0;
+    }
     
     // Update rendering height based on crouching
     this.height = this.isCrouching ? 50 : 70;
@@ -215,7 +224,8 @@ export default class ClientPlayer {
     ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
 
     // Rotate the player if aiming left
-    if (this.gunAngle < -Math.PI / 2 || this.gunAngle > Math.PI / 2) {
+    const facingLeft = this.gunAngle < -Math.PI / 2 || this.gunAngle > Math.PI / 2;
+    if (facingLeft) {
       ctx.scale(-1, 1);
     }
 
@@ -227,6 +237,9 @@ export default class ClientPlayer {
       this.isUsingJetpack,
       this.keys.left || this.keys.right ? (this.keys.right ? 1 : -1) : 0
     );
+
+    // Render gun
+    this.renderGun(ctx, facingLeft);
 
     ctx.restore();
 
@@ -240,6 +253,57 @@ export default class ClientPlayer {
     if (this.isMainPlayer) {
       this.renderAmmoCounter(ctx);
     }
+  }
+
+  // Render the gun
+  renderGun(ctx, facingLeft) {
+    ctx.save();
+    
+    // Use single gun image for both directions
+    // const gunImageSrc = "/sprite/enemy_gun.PNG";
+    // const gunImageSrc = facingLeft ? "/sprite/enemy_gun_left.PNG" : "/sprite/enemy_gun.PNG";
+    const gunImageSrc = facingLeft ? "/sprite/hand_with_gun_left.PNG" : "/sprite/hand_with_gun.PNG";
+    
+    if (!this.gunImage || this.gunImage.src !== window.location.origin + gunImageSrc) {
+      this.gunImage = new Image();
+      this.gunImage.src = gunImageSrc;
+    }
+    
+    // Position gun at player's hand
+    const gunOffsetX = facingLeft ? -20 : 20;
+    const gunOffsetY = 0;
+    
+    // Flip image on x and y axis when facing left
+    if (facingLeft) {
+      ctx.scale(1, -1);
+    }
+    
+    // Rotate gun based on aim angle
+    ctx.rotate(this.gunAngle);
+    
+    // Draw gun
+    const gunWidth = 45;
+    const gunHeight = 20;
+    
+    if (this.gunImage?.complete) {
+      ctx.drawImage(
+        this.gunImage,
+        gunOffsetX - gunWidth/2,
+        gunOffsetY - gunHeight/2,
+        gunWidth,
+        gunHeight
+      );
+    } else {
+      // Fallback rectangle gun while loading
+      ctx.fillStyle = this.color === "blue" ? "#333" : "#555";
+      ctx.fillRect(gunOffsetX - gunWidth/2, gunOffsetY - gunHeight/2, gunWidth, gunHeight);
+      
+      // Gun barrel
+      ctx.fillStyle = "#222";
+      ctx.fillRect(gunOffsetX + gunWidth/2 - 5, gunOffsetY - 2, 8, 4);
+    }
+    
+    ctx.restore();
   }
 
   renderHealthBar(ctx) {

@@ -124,6 +124,7 @@ wss.on("connection", (ws) => {
           break;
 
         case "PLAYER_INPUT":
+          console.log("Received PLAYER_INPUT:", data);
           // Handle all player input through the game room
           if (currentRoom && clientId) {
             currentRoom.handlePlayerInput(clientId, data);
@@ -181,10 +182,12 @@ wss.on("connection", (ws) => {
 
         case "PING":
           // Handle ping for latency measurement
+          console.log("Received ping from client:", data.timestamp);
           ws.send(JSON.stringify({
             type: "PING",
             timestamp: data.timestamp
           }));
+          console.log("Sent ping response with timestamp:", data.timestamp);
           break;
 
         default:

@@ -88,13 +88,17 @@ class GameRoom {
     const player = this.players.get(clientId);
     if (!player || player.isDead) return;
 
+    console.log(`Player ${clientId} input:`, inputData.type);
+
     switch (inputData.type) {
       case 'MOVE':
         player.updateInput(inputData.keys, inputData.gunAngle);
         break;
         
       case 'SHOOT':
+        console.log(`Player ${clientId} attempting to shoot`);
         const bulletData = player.shoot();
+        console.log('Bullet data:', bulletData);
         if (bulletData) {
           const bullet = new ServerBullet(
             bulletData.x,
@@ -103,12 +107,15 @@ class GameRoom {
             bulletData.ownerId
           );
           this.bullets.set(bullet.id, bullet);
+          console.log(`Created bullet ${bullet.id}, total bullets:`, this.bullets.size);
           
           // Broadcast bullet creation
           this.broadcast({
             type: 'BULLET_CREATED',
             bullet: bullet.getState()
           });
+        } else {
+          console.log('Bullet creation failed - null bulletData');
         }
         break;
         

@@ -4,10 +4,15 @@ import Bullet from "./Bullet";
 import Environment from "./Environment";
 import RoomDialog from "./RoomDialog";
 
-const GameCanvas = ({ socket }) => {
+const GameCanvas = ({ socket, isConnected }) => {
   // Canvas and rendering
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
+  
+  // Track socket for debugging
+  useEffect(() => {
+    console.log("Socket changed:", socket ? "connected" : "null/undefined", socket?.readyState);
+  }, [socket]);
   const animationFrameId = useRef(null);
   
   // Game state
@@ -23,7 +28,6 @@ const GameCanvas = ({ socket }) => {
   // Room and networking
   const roomIdRef = useRef(null);
   const [isRoomDialogOpen, setIsRoomDialogOpen] = useState(true);
-  const [isConnected, setIsConnected] = useState(false);
   
   // Game UI state
   const [scores, setScores] = useState({});
@@ -63,12 +67,10 @@ const GameCanvas = ({ socket }) => {
     };
 
     const handleOpen = () => {
-      setIsConnected(true);
       console.log("Connected to server");
     };
 
     const handleClose = () => {
-      setIsConnected(false);
       console.log("Disconnected from server");
     };
 
@@ -202,20 +204,28 @@ const GameCanvas = ({ socket }) => {
 
   // Handle ping response for latency measurement
   const handlePingResponse = (data) => {
+    console.log("Received ping response:", data);
     if (data.timestamp && pingRef.current.pendingPings.has(data.timestamp)) {
       const roundTripTime = Date.now() - pingRef.current.pendingPings.get(data.timestamp);
+      console.log("Calculated ping:", roundTripTime + "ms");
       setPing(roundTripTime);
       pingRef.current.pendingPings.delete(data.timestamp);
+    } else {
+      console.log("Ping response timestamp not found in pending pings");
     }
   };
 
   // Send ping to server
   const sendPing = () => {
-    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      console.log("Cannot send ping - socket not ready");
+      return;
+    }
     
     const timestamp = Date.now();
     pingRef.current.pendingPings.set(timestamp, timestamp);
     
+    console.log("Sending ping with timestamp:", timestamp);
     socket.send(JSON.stringify({
       type: "PING",
       timestamp: timestamp
@@ -299,11 +309,46 @@ const GameCanvas = ({ socket }) => {
   };
 
   const handleBulletCreated = (data) => {
+    console.log("Bullet created:", data.bullet);
     setBullets(prev => {
       const updated = new Map(prev);
-      updated.set(data.bullet.id, new Bullet(data.bullet));
+      const bullet = new Bullet(data.bullet);
+      updated.set(data.bullet.id, bullet);
       return updated;
     });
+    
+    // Trigger gun flash effect and sound for the shooter
+    const shooterId = data.bullet.ownerId;
+    if (shooterId === mainPlayerRef.current.id) {
+      mainPlayerRef.current.lastShot = Date.now();
+      // Play shooting sound
+      playGunSound();
+    } else {
+      // Update other player's lastShot for gun flash
+      setOtherPlayers(prev => {
+        const updated = new Map(prev);
+        const shooter = updated.get(shooterId);
+        if (shooter) {
+          shooter.lastShot = Date.now();
+        }
+        return updated;
+      });
+      
+      // Play distant shooting sound for other players
+      playGunSound(0.3); // Reduced volume for other players
+    }
+  };
+
+  // Play gun shooting sound
+  const playGunSound = (volume = 0.6) => {
+    try {
+      const audio = new Audio('/sounds/submachineGun.mp3');
+      audio.volume = volume;
+      audio.currentTime = 0;
+      audio.play().catch(e => console.log('Could not play gun sound:', e.message));
+    } catch (error) {
+      console.log('Gun sound not available');
+    }
   };
 
   const handleBulletDestroyed = (data) => {
@@ -382,7 +427,9 @@ const GameCanvas = ({ socket }) => {
     };
 
     const handleMouseDown = (e) => {
+      console.log("Mouse down event, socket:", socket ? "available" : "null", "readyState:", socket?.readyState);
       if (e.button === 0) { // Left click
+        console.log("Left click detected, sending SHOOT");
         sendPlayerInput({ type: "SHOOT" });
       }
     };
@@ -402,12 +449,23 @@ const GameCanvas = ({ socket }) => {
 
   // Send player input to server
   const sendPlayerInput = (inputData) => {
-    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    if (!socket) {
+      console.log("Socket is null/undefined");
+      return;
+    }
     
-    socket.send(JSON.stringify({
+    if (socket.readyState !== WebSocket.OPEN) {
+      console.log("Socket not ready, state:", socket.readyState, "CONNECTING:", WebSocket.CONNECTING, "OPEN:", WebSocket.OPEN, "CLOSED:", WebSocket.CLOSED);
+      return;
+    }
+    
+    const message = {
       type: "PLAYER_INPUT",
       ...inputData
-    }));
+    };
+    
+    console.log("Sending message:", message);
+    socket.send(JSON.stringify(message));
   };
 
   // Regular input updates to server
@@ -472,21 +530,30 @@ const GameCanvas = ({ socket }) => {
       });
 
       // Update and render bullets
-      setBullets(prev => {
-        const updated = new Map();
-        
-        prev.forEach((bullet, id) => {
-          if (bullet.update(deltaTime)) {
-            bullet.render(ctx);
-            updated.set(id, bullet);
-          }
-        });
-        
-        return updated;
+      const bulletsToRemove = [];
+      
+      bullets.forEach((bullet, id) => {
+        if (bullet.update(deltaTime)) {
+          bullet.render(ctx);
+        } else {
+          bulletsToRemove.push(id);
+        }
       });
+      
+      // Remove inactive bullets after the loop
+      if (bulletsToRemove.length > 0) {
+        setBullets(prev => {
+          const updated = new Map(prev);
+          bulletsToRemove.forEach(id => updated.delete(id));
+          return updated;
+        });
+      }
 
       // Render UI
       renderUI(ctx);
+      
+      // Render crosshair at mouse position
+      renderCrosshair(ctx);
 
       animationFrameId.current = requestAnimationFrame(gameLoop);
     };
@@ -637,7 +704,7 @@ const GameCanvas = ({ socket }) => {
     // Timer (top center)
     const minutes = Math.floor(timer / 60);
     const seconds = timer % 60;
-    const timerBoxX = fixedWidth / 2 - 60;
+    const timerBoxX = fixedWidth / 2 - 50;
     const timerBoxY = 10;
     const timerBoxWidth = 120;
     const timerBoxHeight = 50;
@@ -726,6 +793,50 @@ const GameCanvas = ({ socket }) => {
     }
   };
 
+  // Render crosshair at mouse position
+  const renderCrosshair = (ctx) => {
+    const mouseX = mouseRef.current.x;
+    const mouseY = mouseRef.current.y;
+    
+    ctx.save();
+    ctx.strokeStyle = "lime";
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.8;
+    
+    // Draw crosshair lines
+    const crosshairSize = 15;
+    
+    // Horizontal line
+    ctx.beginPath();
+    ctx.moveTo(mouseX - crosshairSize, mouseY);
+    ctx.lineTo(mouseX - 5, mouseY);
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(mouseX + 5, mouseY);
+    ctx.lineTo(mouseX + crosshairSize, mouseY);
+    ctx.stroke();
+    
+    // Vertical line
+    ctx.beginPath();
+    ctx.moveTo(mouseX, mouseY - crosshairSize);
+    ctx.lineTo(mouseX, mouseY - 5);
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(mouseX, mouseY + 5);
+    ctx.lineTo(mouseX, mouseY + crosshairSize);
+    ctx.stroke();
+    
+    // Center dot
+    ctx.fillStyle = "lime";
+    ctx.beginPath();
+    ctx.arc(mouseX, mouseY, 2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.restore();
+  };
+
   // Room management functions
   const createRoom = () => {
     if (!socket) return;
@@ -812,7 +923,7 @@ const GameCanvas = ({ socket }) => {
           border: "2px solid white",
           maxWidth: "100%",
           maxHeight: "100%",
-          cursor: "crosshair",
+          cursor: "none", // Hide cursor since we draw our own crosshair
         }}
       />
       
