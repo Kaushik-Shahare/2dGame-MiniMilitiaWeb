@@ -3,16 +3,31 @@
  */
 class ServerEnvironment {
   constructor() {
-    // Fixed dimensions
-    this.fixedWidth = 1280;
-    this.fixedHeight = 720;
-    this.groundLevel = this.fixedHeight - 200;
+    // Base dimensions for camera viewport
+    this.baseWidth = 1280;
+    this.baseHeight = 720;
+    
+    // Large world dimensions - 3x wider than height (like real Mini Militia)
+    this.worldWidth = 720 * 3; // 2160 pixels - large horizontal world
+    this.worldHeight = 720;
+    
+    this.groundLevel = this.baseHeight - 100; // Lowered from 200 to 100 for more vertical space
 
-    // Obstacles for collision detection
+    // Obstacles distributed across the large world for varied gameplay
     this.obstacles = [
-      { x: 400, y: this.fixedHeight - 250, width: 100, height: 50 },
-      { x: 300, y: this.fixedHeight - 450, width: 100, height: 50 },
-      { x: 600, y: this.fixedHeight - 550, width: 100, height: 50 },
+      // Left section
+      { x: 200, y: this.baseHeight - 150, width: 100, height: 50 },
+      { x: 100, y: this.baseHeight - 300, width: 100, height: 50 },
+      
+      // Center section (original area)
+      { x: 700, y: this.baseHeight - 150, width: 100, height: 50 },
+      { x: 600, y: this.baseHeight - 300, width: 100, height: 50 },
+      { x: 900, y: this.baseHeight - 400, width: 100, height: 50 },
+      
+      // Right section  
+      { x: 1400, y: this.baseHeight - 200, width: 100, height: 50 },
+      { x: 1600, y: this.baseHeight - 350, width: 100, height: 50 },
+      { x: 1800, y: this.baseHeight - 250, width: 100, height: 50 },
     ];
   }
 
@@ -56,8 +71,8 @@ class ServerEnvironment {
       }
     }
     
-    // Check world boundaries
-    if (newX < 0 || newX + width > this.fixedWidth) {
+    // Check world boundaries - use extended world width
+    if (newX < 0 || newX + width > this.worldWidth) {
       return true;
     }
     
@@ -79,8 +94,8 @@ class ServerEnvironment {
       }
     }
     
-    // Check world boundaries
-    if (newY < 0 || newY + height > this.fixedHeight) {
+    // Check world boundaries - use extended world dimensions  
+    if (newY < 0 || newY + height > this.worldHeight) {
       return true;
     }
     
@@ -109,7 +124,7 @@ class ServerEnvironment {
     const playerHeight = 70;
     
     for (let i = 0; i < maxAttempts; i++) {
-      const x = Math.random() * (this.fixedWidth - playerWidth);
+      const x = Math.random() * (this.worldWidth - playerWidth); // Use world width for spawning
       const y = Math.random() * (this.groundLevel - playerHeight - 100) + 50; // Above ground, below ceiling
       
       if (!this.checkAreaCollision(x, y, playerWidth, playerHeight)) {
@@ -120,8 +135,8 @@ class ServerEnvironment {
     // Fallback to default positions if no safe spawn found
     const fallbackPositions = [
       { x: 100, y: 100 },
-      { x: this.fixedWidth - 150, y: 100 },
-      { x: this.fixedWidth / 2 - 25, y: 100 }
+      { x: this.worldWidth - 150, y: 100 }, // Use world width
+      { x: this.worldWidth / 2 - 25, y: 100 } // Use world width
     ];
     
     for (let pos of fallbackPositions) {
@@ -137,8 +152,10 @@ class ServerEnvironment {
   // Get environment state for clients (obstacles and boundaries)
   getState() {
     return {
-      fixedWidth: this.fixedWidth,
-      fixedHeight: this.fixedHeight,
+      baseWidth: this.baseWidth,
+      baseHeight: this.baseHeight, 
+      worldWidth: this.worldWidth,
+      worldHeight: this.worldHeight,
       groundLevel: this.groundLevel,
       obstacles: this.obstacles
     };

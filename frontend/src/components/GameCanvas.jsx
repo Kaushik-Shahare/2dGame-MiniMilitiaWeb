@@ -15,13 +15,21 @@ const GameCanvas = ({ socket, isConnected }) => {
   }, [socket]);
   const animationFrameId = useRef(null);
   
-  // Game state
-  const [canvasSize, setCanvasSize] = useState({ width: 1280, height: 720 });
+  // Game state - fixed viewport size (camera view)
+  const [canvasSize, setCanvasSize] = useState({ 
+    width: 1280, // Fixed camera viewport width
+    height: 720  // Fixed camera viewport height
+  });
+  
+  // Camera state for world following
+  const [camera, setCamera] = useState({ x: 0, y: 0 });
+  const worldWidth = 720 * 3; // 2160 pixels - large horizontal world
+  const worldHeight = 720;
   // Initialize environment once
   const environment = useMemo(() => new Environment(), []);
   
   // Players and bullets (client-side rendering only)
-  const mainPlayerRef = useRef(new Player(100, 500, true));
+  const mainPlayerRef = useRef(new Player(worldWidth / 2, 550, true)); // Start in center of world
   const [otherPlayers, setOtherPlayers] = useState(new Map());
   const [bullets, setBullets] = useState(new Map());
   
@@ -47,12 +55,14 @@ const GameCanvas = ({ socket, isConnected }) => {
   const lastInputSent = useRef(0);
   const inputSendRate = 30; // 30Hz input sending
 
-  // Handle window resize for responsive canvas
+  // Handle window resize - maintain fixed viewport, scale to fit screen
   useEffect(() => {
     const handleResize = () => {
+      // Canvas always maintains fixed viewport size (1280x720)
+      // CSS will scale it to fit the screen
       setCanvasSize({
-        width: window.innerWidth,
-        height: window.innerHeight
+        width: 1280,  // Fixed camera viewport width
+        height: 720   // Fixed camera viewport height
       });
     };
 
@@ -436,10 +446,19 @@ const GameCanvas = ({ socket, isConnected }) => {
       const scaleX = canvasSize.width / rect.width;
       const scaleY = canvasSize.height / rect.height;
       
-      mouseRef.current.x = (e.clientX - rect.left) * scaleX;
-      mouseRef.current.y = (e.clientY - rect.top) * scaleY;
+      // Convert screen coordinates to world coordinates accounting for camera
+      const screenX = (e.clientX - rect.left) * scaleX;
+      const screenY = (e.clientY - rect.top) * scaleY;
+      const worldX = screenX + camera.x;
+      const worldY = screenY + camera.y;
       
-      mainPlayerRef.current.updateGunAngle(mouseRef.current.x, mouseRef.current.y);
+      // Store both screen and world coordinates
+      mouseRef.current.x = screenX; // Used for crosshair rendering (screen-space)
+      mouseRef.current.y = screenY;
+      mouseRef.current.worldX = worldX; // Used for gun aiming (world-space)
+      mouseRef.current.worldY = worldY;
+      
+      mainPlayerRef.current.updateGunAngle(worldX, worldY);
     };
 
     const handleMouseDown = (e) => {
@@ -678,6 +697,29 @@ const GameCanvas = ({ socket, isConnected }) => {
     }
   }, [canvasSize.width, canvasSize.height, notification, fps, ping, isConnected, scores, timer]);
 
+  // Camera following logic
+  useEffect(() => {
+    const updateCamera = () => {
+      const player = mainPlayerRef.current;
+      if (!player) return;
+
+      // Calculate ideal camera position (center player on screen)
+      let idealCameraX = player.x - canvasSize.width / 2;
+      let idealCameraY = player.y - canvasSize.height / 2;
+
+      // Apply camera boundaries (stop following at world edges)
+      const cameraX = Math.max(0, Math.min(idealCameraX, worldWidth - canvasSize.width));
+      const cameraY = Math.max(0, Math.min(idealCameraY, worldHeight - canvasSize.height));
+
+      setCamera({ x: cameraX, y: cameraY });
+    };
+
+    // Update camera position frequently for smooth following
+    const cameraInterval = setInterval(updateCamera, 16); // ~60fps camera updates
+
+    return () => clearInterval(cameraInterval);
+  }, [canvasSize.width, canvasSize.height, worldWidth, worldHeight]);
+
   // Send player input to server
   const sendPlayerInput = (inputData) => {
     if (!socket) {
@@ -746,8 +788,13 @@ const GameCanvas = ({ socket, isConnected }) => {
       const scaleX = rect.width / canvasSize.width;
       const scaleY = rect.height / canvasSize.height;
 
-      // Render environment
-      environment.render(ctx, scaleX, scaleY, canvasSize.width, canvasSize.height);
+      // Render environment with camera offset
+      environment.render(ctx, scaleX, scaleY, canvasSize.width, canvasSize.height, camera.x, camera.y);
+
+      // Apply camera translation for all game objects
+      ctx.save();
+      ctx.scale(scaleX, scaleY);
+      ctx.translate(-camera.x, -camera.y);
 
       // Update and render main player with prediction
       const deltaTime = 16.67; // Assume 60fps
@@ -770,6 +817,9 @@ const GameCanvas = ({ socket, isConnected }) => {
           bulletsToRemove.push(id);
         }
       });
+
+      // Restore context after camera translation for game objects
+      ctx.restore();
       
       // Remove inactive bullets after the loop
       if (bulletsToRemove.length > 0) {
@@ -780,10 +830,10 @@ const GameCanvas = ({ socket, isConnected }) => {
         });
       }
 
-      // Render UI
+      // Render UI (not affected by camera)
       renderUI(ctx);
       
-      // Render crosshair at mouse position
+      // Render crosshair at mouse position (screen-space, not affected by camera)
       renderCrosshair(ctx);
 
       animationFrameId.current = requestAnimationFrame(gameLoop);
@@ -796,7 +846,7 @@ const GameCanvas = ({ socket, isConnected }) => {
         cancelAnimationFrame(animationFrameId.current);
       }
     };
-  }, [otherPlayers, bullets, canvasSize.width, canvasSize.height, environment, renderUI]);
+  }, [otherPlayers, bullets, canvasSize.width, canvasSize.height, environment, renderUI, camera.x, camera.y]);
 
   // Ping monitoring
   useEffect(() => {

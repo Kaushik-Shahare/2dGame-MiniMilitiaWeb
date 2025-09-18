@@ -8,19 +8,19 @@ const App = () => {
   useEffect(() => {
     // const ws = new WebSocket("ws://localhost:3001");
     const ws = new WebSocket("wss://minimilitia-backend-kaushik.onrender.com");
-    
+
     ws.onopen = () => {
       console.log("WebSocket connected");
       setSocket(ws);
       setIsConnected(true);
     };
-    
+
     ws.onclose = () => {
       console.log("WebSocket disconnected");
       setSocket(null);
       setIsConnected(false);
     };
-    
+
     ws.onerror = (error) => {
       console.error("WebSocket error:", error);
       setIsConnected(false);
