@@ -52,6 +52,35 @@ const GameCanvas = ({ socket, isConnected }) => {
   });
   
   const mouseRef = useRef({ x: 640, y: 360 });
+  
+  // Joystick-style mouse constraint system
+  // Constants
+  const JOYSTICK_RADIUS = 75; // Fixed radius for mouse constraint (reduced by half)
+  const constrainedMouseRef = useRef({ x: 640, y: 360, worldX: 640, worldY: 360 });
+  
+  // Pointer lock for cursor constraint
+  const [isPointerLocked, setIsPointerLocked] = useState(false);
+  const virtualCursorRef = useRef({ x: 640, y: 360 }); // Virtual cursor position when pointer locked
+  
+  // Request pointer lock function
+  const requestPointerLock = useCallback(() => {
+    if (canvasRef.current && document.pointerLockElement !== canvasRef.current) {
+      console.log("Requesting pointer lock for game mode...");
+      // Small delay to ensure canvas is ready
+      setTimeout(() => {
+        canvasRef.current.requestPointerLock();
+      }, 100);
+    }
+  }, []);
+
+  // Exit pointer lock function  
+  const exitPointerLock = useCallback(() => {
+    if (document.pointerLockElement) {
+      console.log("Exiting pointer lock...");
+      document.exitPointerLock();
+    }
+  }, []);
+  
   const lastInputSent = useRef(0);
   const inputSendRate = 30; // 30Hz input sending
 
@@ -123,10 +152,14 @@ const GameCanvas = ({ socket, isConnected }) => {
     switch (data.type) {
       case "ROOM_CREATED":
         setNotification(`Room created: ${data.roomId}`);
+        console.log("Room created successfully, requesting pointer lock...");
+        requestPointerLock();
         break;
         
       case "ROOM_JOINED":
         setNotification("Joined room successfully");
+        console.log("Joined room successfully, requesting pointer lock...");
+        requestPointerLock();
         break;
         
       case "ERROR":
@@ -401,6 +434,13 @@ const GameCanvas = ({ socket, isConnected }) => {
       const player = mainPlayerRef.current;
       player.handleKeyDown(e);
       
+      // Handle ESC key to exit pointer lock
+      if (e.key === "Escape" && document.pointerLockElement) {
+        console.log("ESC pressed, exiting pointer lock...");
+        exitPointerLock();
+        return;
+      }
+      
       // Update local key state
       if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") {
         keysRef.current.right = true;
@@ -442,27 +482,102 @@ const GameCanvas = ({ socket, isConnected }) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvasSize.width / rect.width;
-      const scaleY = canvasSize.height / rect.height;
+      let screenX, screenY;
       
-      // Convert screen coordinates to world coordinates accounting for camera
-      const screenX = (e.clientX - rect.left) * scaleX;
-      const screenY = (e.clientY - rect.top) * scaleY;
-      const worldX = screenX + camera.x;
-      const worldY = screenY + camera.y;
+      if (document.pointerLockElement === canvas) {
+        // Pointer lock mode: use relative movement to update virtual cursor
+        const centerX = canvasSize.width / 2;
+        const centerY = canvasSize.height / 2;
+        
+        // Update virtual cursor position with relative movement
+        virtualCursorRef.current.x += e.movementX;
+        virtualCursorRef.current.y += e.movementY;
+        
+        // Constrain virtual cursor to joystick radius
+        const deltaX = virtualCursorRef.current.x - centerX;
+        const deltaY = virtualCursorRef.current.y - centerY;
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        
+        if (distance > JOYSTICK_RADIUS) {
+          // Constrain to radius
+          const normalizedX = deltaX / distance;
+          const normalizedY = deltaY / distance;
+          virtualCursorRef.current.x = centerX + normalizedX * JOYSTICK_RADIUS;
+          virtualCursorRef.current.y = centerY + normalizedY * JOYSTICK_RADIUS;
+        }
+        
+        screenX = virtualCursorRef.current.x;
+        screenY = virtualCursorRef.current.y;
+      } else {
+        // Normal mode: use mouse position
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvasSize.width / rect.width;
+        const scaleY = canvasSize.height / rect.height;
+        
+        // Convert screen coordinates to canvas coordinates
+        screenX = (e.clientX - rect.left) * scaleX;
+        screenY = (e.clientY - rect.top) * scaleY;
+      }
       
-      // Store both screen and world coordinates
-      mouseRef.current.x = screenX; // Used for crosshair rendering (screen-space)
+      // Store raw mouse position
+      mouseRef.current.x = screenX;
       mouseRef.current.y = screenY;
-      mouseRef.current.worldX = worldX; // Used for gun aiming (world-space)
-      mouseRef.current.worldY = worldY;
       
-      mainPlayerRef.current.updateGunAngle(worldX, worldY);
+      // Calculate screen center
+      const centerX = canvasSize.width / 2;
+      const centerY = canvasSize.height / 2;
+      
+      // Calculate offset from center
+      const deltaX = screenX - centerX;
+      const deltaY = screenY - centerY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      
+      // Debug logging for constraint verification
+      if (distance > JOYSTICK_RADIUS) {
+        console.log(`Constraining: distance=${distance.toFixed(1)}, radius=${JOYSTICK_RADIUS}`);
+      }
+      
+      // Constrain to joystick radius
+      let constrainedX, constrainedY;
+      if (distance > JOYSTICK_RADIUS) {
+        // Normalize and scale to radius
+        const normalizedX = deltaX / distance;
+        const normalizedY = deltaY / distance;
+        constrainedX = centerX + normalizedX * JOYSTICK_RADIUS;
+        constrainedY = centerY + normalizedY * JOYSTICK_RADIUS;
+        
+        // Verify constraint worked
+        const constrainedDistance = Math.sqrt(
+          (constrainedX - centerX) * (constrainedX - centerX) + 
+          (constrainedY - centerY) * (constrainedY - centerY)
+        );
+        console.log(`Constrained distance: ${constrainedDistance.toFixed(1)}`);
+      } else {
+        // Within radius, use actual position
+        constrainedX = screenX;
+        constrainedY = screenY;
+      }
+      
+      // Convert constrained position to world coordinates
+      const worldX = constrainedX + camera.x;
+      const worldY = constrainedY + camera.y;
+      
+      // Store constrained coordinates
+      constrainedMouseRef.current.x = constrainedX;
+      constrainedMouseRef.current.y = constrainedY;
+      constrainedMouseRef.current.worldX = worldX;
+      constrainedMouseRef.current.worldY = worldY;
+      
+      // Calculate gun angle from screen center to constrained position
+      const angleFromCenter = Math.atan2(constrainedY - centerY, constrainedX - centerX);
+      
+      // Update gun angle using the calculated angle from center
+      mainPlayerRef.current.updateGunAngleFromCenter(angleFromCenter);
     };
 
     const handleMouseDown = (e) => {
       console.log("Mouse down event, socket:", socket ? "available" : "null", "readyState:", socket?.readyState);
+      
       if (e.button === 0) { // Left click
         console.log("Left click detected, sending SHOOT");
         sendPlayerInput({ type: "SHOOT" });
@@ -473,12 +588,37 @@ const GameCanvas = ({ socket, isConnected }) => {
     document.addEventListener("keyup", handleKeyUp);
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mousedown", handleMouseDown);
+    
+    // Pointer lock event handlers
+    const handlePointerLockChange = () => {
+      const isLocked = document.pointerLockElement === canvasRef.current;
+      setIsPointerLocked(isLocked);
+      
+      if (isLocked) {
+        // Initialize virtual cursor to center when pointer lock is acquired
+        virtualCursorRef.current.x = canvasSize.width / 2;
+        virtualCursorRef.current.y = canvasSize.height / 2;
+        console.log("Pointer lock acquired, cursor constrained to joystick radius");
+      } else {
+        console.log("Pointer lock released");
+      }
+    };
+    
+    const handlePointerLockError = () => {
+      console.log("Pointer lock failed");
+      setIsPointerLocked(false);
+    };
+    
+    document.addEventListener("pointerlockchange", handlePointerLockChange);
+    document.addEventListener("pointerlockerror", handlePointerLockError);
 
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("keyup", handleKeyUp);
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("pointerlockchange", handlePointerLockChange);
+      document.removeEventListener("pointerlockerror", handlePointerLockError);
     };
   }, []);
 
@@ -859,42 +999,51 @@ const GameCanvas = ({ socket, isConnected }) => {
     return () => clearInterval(pingInterval);
   }, [socket]);
 
-  // Render crosshair at mouse position
+  // Render joystick-style aiming system
   const renderCrosshair = (ctx) => {
-    const mouseX = mouseRef.current.x;
-    const mouseY = mouseRef.current.y;
+    const mouseX = constrainedMouseRef.current.x;
+    const mouseY = constrainedMouseRef.current.y;
+    const centerX = canvasSize.width / 2;
+    const centerY = canvasSize.height / 2;
     
     ctx.save();
+    
+    // Draw center dot (joystick center)
+    ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw crosshair at aiming position
     ctx.strokeStyle = "lime";
     ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.8;
+    ctx.globalAlpha = 1.0;
     
-    // Draw crosshair lines
-    const crosshairSize = 15;
+    const crosshairSize = 12;
     
     // Horizontal line
     ctx.beginPath();
     ctx.moveTo(mouseX - crosshairSize, mouseY);
-    ctx.lineTo(mouseX - 5, mouseY);
+    ctx.lineTo(mouseX - 4, mouseY);
     ctx.stroke();
     
     ctx.beginPath();
-    ctx.moveTo(mouseX + 5, mouseY);
+    ctx.moveTo(mouseX + 4, mouseY);
     ctx.lineTo(mouseX + crosshairSize, mouseY);
     ctx.stroke();
     
     // Vertical line
     ctx.beginPath();
     ctx.moveTo(mouseX, mouseY - crosshairSize);
-    ctx.lineTo(mouseX, mouseY - 5);
+    ctx.lineTo(mouseX, mouseY - 4);
     ctx.stroke();
     
     ctx.beginPath();
-    ctx.moveTo(mouseX, mouseY + 5);
+    ctx.moveTo(mouseX, mouseY + 4);
     ctx.lineTo(mouseX, mouseY + crosshairSize);
     ctx.stroke();
     
-    // Center dot
+    // Center targeting dot
     ctx.fillStyle = "lime";
     ctx.beginPath();
     ctx.arc(mouseX, mouseY, 2, 0, Math.PI * 2);
@@ -962,12 +1111,25 @@ const GameCanvas = ({ socket, isConnected }) => {
   // Handle fullscreen changes
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullScreen(!!document.fullscreenElement);
+      const wasFullScreen = isFullScreen;
+      const nowFullScreen = !!document.fullscreenElement;
+      setIsFullScreen(nowFullScreen);
+      
+      // Request pointer lock when entering fullscreen
+      if (!wasFullScreen && nowFullScreen) {
+        console.log("Entered fullscreen, requesting pointer lock...");
+        requestPointerLock();
+      }
+      // Exit pointer lock when leaving fullscreen
+      else if (wasFullScreen && !nowFullScreen) {
+        console.log("Exited fullscreen, releasing pointer lock...");
+        exitPointerLock();
+      }
     };
 
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
-  }, []);
+  }, [isFullScreen, requestPointerLock, exitPointerLock]);
 
   return (
     <div

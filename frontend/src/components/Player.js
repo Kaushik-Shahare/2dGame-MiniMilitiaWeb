@@ -260,9 +260,7 @@ export default class ClientPlayer {
     ctx.save();
     
     // Use single gun image for both directions
-    // const gunImageSrc = "/sprite/enemy_gun.PNG";
-    // const gunImageSrc = facingLeft ? "/sprite/enemy_gun_left.PNG" : "/sprite/enemy_gun.PNG";
-    const gunImageSrc = facingLeft ? "/sprite/hand_with_gun_left.PNG" : "/sprite/hand_with_gun.PNG";
+    const gunImageSrc = facingLeft ? "/sprite/hand_with_gun_left.png" : "/sprite/hand_with_gun.png";
     
     if (!this.gunImage || this.gunImage.src !== window.location.origin + gunImageSrc) {
       this.gunImage = new Image();
@@ -382,5 +380,12 @@ export default class ClientPlayer {
     const playerCenterY = this.y + this.height / 2;
     
     this.gunAngle = Math.atan2(mouseY - playerCenterY, mouseX - playerCenterX);
+  }
+
+  // Update gun angle from center point (for joystick-style aiming)
+  updateGunAngleFromCenter(angle) {
+    if (!this.isMainPlayer) return;
+    
+    this.gunAngle = angle;
   }
 }
